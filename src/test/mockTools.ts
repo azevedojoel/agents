@@ -322,8 +322,8 @@ export function createToolSearchToolRegistry(): LCToolRegistry {
       defer_loading: true,
     },
     {
-      name: 'search_files',
-      description: 'Search for files in the file system by name or content.',
+      name: 'search_user_files',
+      description: 'Search for files in the workspace by name or content.',
       parameters: {
         type: 'object',
         properties: {

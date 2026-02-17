@@ -690,8 +690,8 @@ describe('ToolSearch', () => {
         description: 'Execute code',
         defer_loading: true,
       });
-      registry.set('read_file', {
-        name: 'read_file',
+      registry.set('workspace_read_file', {
+        name: 'workspace_read_file',
         description: 'Read file',
         defer_loading: false,
       });
@@ -779,10 +779,10 @@ describe('ToolSearch', () => {
       const registry = createRegistry();
 
       const deferredOnly = getDeferredToolsListing(registry, true);
-      expect(deferredOnly).not.toContain('read_file');
+      expect(deferredOnly).not.toContain('workspace_read_file');
 
       const allTools = getDeferredToolsListing(registry, false);
-      expect(allTools).toContain('read_file');
+      expect(allTools).toContain('workspace_read_file');
     });
 
     it('returns empty string for undefined registry', () => {
@@ -791,8 +791,8 @@ describe('ToolSearch', () => {
 
     it('returns empty string for registry with no matching tools', () => {
       const registry: LCToolRegistry = new Map();
-      registry.set('read_file', {
-        name: 'read_file',
+      registry.set('workspace_read_file', {
+        name: 'workspace_read_file',
         description: 'Read file',
         defer_loading: false,
       });

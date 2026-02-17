@@ -21,6 +21,8 @@ export enum GraphEvents {
   ON_REASONING_DELTA = 'on_reasoning_delta',
   /** [Custom] Request to execute tools - dispatched by ToolNode, handled by host */
   ON_TOOL_EXECUTE = 'on_tool_execute',
+  /** [Custom] Emitted when a direct handoff tool completes - allows host to update handoffState */
+  ON_HANDOFF = 'on_handoff',
 
   /* Official Events */
 

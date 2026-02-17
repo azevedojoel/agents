@@ -724,10 +724,40 @@ export function createContentAggregator(): t.ContentAggregatorResult {
 
       const { id: stepId } = result;
 
+      let targetIndex: number | undefined;
+
       const runStep = stepMap.get(stepId);
-      if (!runStep) {
+      if (runStep) {
+        targetIndex = runStep.index;
+      } else if (typeof result.index === 'number') {
+        targetIndex = result.index;
+      } else {
+        const toolCallId = result.tool_call?.id;
+        const toolCallName = result.tool_call?.name;
+        for (let i = 0; i < contentParts.length; i++) {
+          const part = contentParts[i];
+          const tc =
+            part?.type === ContentTypes.TOOL_CALL
+              ? (part as t.ToolCallContent).tool_call
+              : undefined;
+          if (!tc) continue;
+          const hasOutput = tc.output != null && tc.output !== '';
+          if (hasOutput) continue;
+          if (toolCallId && tc.id === toolCallId) {
+            targetIndex = i;
+            break;
+          }
+          if (toolCallName && tc.name === toolCallName) {
+            targetIndex = i;
+            break;
+          }
+        }
+      }
+
+      if (targetIndex == null) {
         console.warn(
-          'No run step or runId found for completed tool call event'
+          'No run step or runId found for completed tool call event',
+          { stepId, toolName: result.tool_call?.name }
         );
         return;
       }
@@ -737,7 +767,7 @@ export function createContentAggregator(): t.ContentAggregatorResult {
         tool_call: result.tool_call,
       };
 
-      updateContent(runStep.index, contentPart, true);
+      updateContent(targetIndex, contentPart, true);
     }
   };
 

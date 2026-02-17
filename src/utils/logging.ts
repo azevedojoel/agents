@@ -22,8 +22,8 @@ export function setupLogging(logFileName: string): void {
 
   process.stdout.write = function(
     buffer: Uint8Array | string,
-    cb?: ((err?: Error) => void) | string,
-    fd?: ((err?: Error) => void)
+    cb?: ((err?: Error | null) => void) | string,
+    fd?: ((err?: Error | null) => void)
   ): boolean {
     if (typeof buffer === 'string') {
       logFile.write(buffer);
@@ -35,8 +35,8 @@ export function setupLogging(logFileName: string): void {
 
   process.stderr.write = function(
     buffer: Uint8Array | string,
-    cb?: ((err?: Error) => void) | string,
-    fd?: ((err?: Error) => void)
+    cb?: ((err?: Error | null) => void) | string,
+    fd?: ((err?: Error | null) => void)
   ): boolean {
     if (typeof buffer === 'string') {
       logFile.write(buffer);

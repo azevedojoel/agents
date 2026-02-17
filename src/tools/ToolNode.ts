@@ -479,11 +479,25 @@ export class ToolNode<T = any> extends RunnableCallable<T, T> {
     let outputs: (BaseMessage | Command)[];
 
     if (this.isSendInput(input)) {
-      const isDirectTool = this.directToolNames?.has(input.lg_tool_call.name);
+      const call = input.lg_tool_call;
+      const isDirectTool = this.directToolNames?.has(call.name);
       if (this.eventDrivenMode && isDirectTool !== true) {
-        return this.executeViaEvent([input.lg_tool_call], config, input);
+        return this.executeViaEvent([call], config, input);
       }
-      outputs = [await this.runTool(input.lg_tool_call, config)];
+      const output = await this.runTool(call, config);
+      if (
+        isCommand(output) &&
+        typeof output.goto === 'string' &&
+        typeof call.name === 'string' &&
+        call.name.startsWith(Constants.LC_TRANSFER_TO_)
+      ) {
+        safeDispatchCustomEvent(
+          GraphEvents.ON_HANDOFF,
+          { toolName: call.name, destinationAgentId: output.goto },
+          config
+        );
+      }
+      outputs = [output];
     } else {
       let messages: BaseMessage[];
       if (Array.isArray(input)) {
@@ -556,6 +570,25 @@ export class ToolNode<T = any> extends RunnableCallable<T, T> {
               directCalls.map((call) => this.runTool(call, config))
             )
             : [];
+
+        for (let i = 0; i < directCalls.length; i++) {
+          const call = directCalls[i];
+          const output = directOutputs[i];
+          if (
+            call &&
+            output &&
+            isCommand(output) &&
+            typeof output.goto === 'string' &&
+            typeof call.name === 'string' &&
+            call.name.startsWith(Constants.LC_TRANSFER_TO_)
+          ) {
+            safeDispatchCustomEvent(
+              GraphEvents.ON_HANDOFF,
+              { toolName: call.name, destinationAgentId: output.goto },
+              config
+            );
+          }
+        }
 
         const eventOutputs: ToolMessage[] =
           eventCalls.length > 0

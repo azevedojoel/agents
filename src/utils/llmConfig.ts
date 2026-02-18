@@ -64,7 +64,7 @@ export const llmConfigs: Record<string, t.LLMConfig | undefined> = {
       baseURL: process.env.OPENROUTER_BASE_URL,
       defaultHeaders: {
         'HTTP-Referer': 'https://librechat.ai',
-        'X-Title': 'LibreChat',
+        'X-Title': 'Daily Thread',
       },
     },
     include_reasoning: true,

@@ -569,12 +569,29 @@ export function createContentAggregator(): t.ContentAggregatorResult {
         getNonEmptyValue([incomingName, existingContent?.tool_call?.name]) ??
         '';
 
+      // Preserve auth/expires_at (MCP OAuth) from either source
+      const incomingAuth = (contentPart.tool_call as { auth?: string }).auth;
+      const existingAuth = existingContent?.tool_call?.auth as
+        | string
+        | undefined;
+      const authStr =
+        getNonEmptyValue(
+          [incomingAuth, existingAuth].filter(Boolean) as string[],
+        ) ?? '';
+      const expiresAtVal =
+        (contentPart.tool_call as { expires_at?: number }).expires_at ??
+        (existingContent?.tool_call as { expires_at?: number } | undefined)
+          ?.expires_at;
+
       const newToolCall: ToolCall & t.PartMetadata = {
         id,
         name,
         args,
         type: ToolCallTypes.TOOL_CALL,
       };
+      if (authStr) (newToolCall as Record<string, unknown>).auth = authStr;
+      if (typeof expiresAtVal === 'number')
+        (newToolCall as Record<string, unknown>).expires_at = expiresAtVal;
 
       if (finalUpdate) {
         newToolCall.progress = 1;
@@ -705,7 +722,15 @@ export function createContentAggregator(): t.ContentAggregatorResult {
         runStepDelta.delta.tool_calls
       ) {
         runStepDelta.delta.tool_calls.forEach((toolCallDelta) => {
-          const toolCallId = toolCallIdMap.get(runStepDelta.id);
+          // Prefer delta's id (map overwrites for multi-tool steps)
+          const toolCallId =
+            toolCallDelta.id ?? toolCallIdMap.get(runStepDelta.id) ?? '';
+          const deltaAuth =
+            (runStepDelta.delta as { auth?: string; expires_at?: number }).auth ??
+            (toolCallDelta as { auth?: string; expires_at?: number }).auth;
+          const deltaExpiresAt =
+            (runStepDelta.delta as { auth?: string; expires_at?: number })
+              .expires_at ?? (toolCallDelta as { auth?: string; expires_at?: number }).expires_at;
 
           const contentPart: t.MessageContentComplex = {
             type: ContentTypes.TOOL_CALL,
@@ -713,10 +738,30 @@ export function createContentAggregator(): t.ContentAggregatorResult {
               args: toolCallDelta.args ?? '',
               name: toolCallDelta.name,
               id: toolCallId,
+              ...(deltaAuth != null && { auth: deltaAuth }),
+              ...(deltaExpiresAt != null && { expires_at: deltaExpiresAt }),
             },
           };
 
-          updateContent(runStep.index, contentPart);
+          // Resolve index: runStep.index can misalign when think/text are interleaved.
+          // Find matching tool call by id/name to avoid "Content type mismatch".
+          const deltaName = toolCallDelta.name ?? '';
+          let targetIndex = runStep.index;
+          const foundIdx = contentParts.findIndex((part) => {
+            const tc =
+              part?.type === ContentTypes.TOOL_CALL
+                ? (part as t.ToolCallContent).tool_call
+                : undefined;
+            if (!tc) return false;
+            return (
+              (toolCallId && tc.id === toolCallId) ||
+              (deltaName && tc.name === deltaName) ||
+              (deltaName && tc.name?.includes(deltaName))
+            );
+          });
+          if (foundIdx >= 0) targetIndex = foundIdx;
+
+          updateContent(targetIndex, contentPart);
         });
       }
     } else if (event === GraphEvents.ON_RUN_STEP_COMPLETED) {

@@ -215,6 +215,58 @@ describe('formatAgentMessages', () => {
     ).toStrictEqual({ input: 'non-json-string' });
   });
 
+  it('should deduplicate duplicate tool_call IDs and produce unique IDs in output', () => {
+    const duplicateId = 'toolu_01QMSbm1ZHtufjaxdtiuvVRF';
+    const tools = new Set(['workspace_list_files']);
+    const payload: TPayload = [
+      { role: 'user', content: 'List files in / and /src' },
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: ContentTypes.TEXT,
+            [ContentTypes.TEXT]: 'Listing files...',
+            tool_call_ids: [duplicateId, duplicateId],
+          },
+          {
+            type: ContentTypes.TOOL_CALL,
+            tool_call: {
+              id: duplicateId,
+              name: 'workspace_list_files',
+              args: '{"path":"/"}',
+              output: '[]',
+            },
+          },
+          {
+            type: ContentTypes.TOOL_CALL,
+            tool_call: {
+              id: duplicateId,
+              name: 'workspace_list_files',
+              args: '{"path":"/src"}',
+              output: '[]',
+            },
+          },
+        ],
+      },
+    ];
+
+    const result = formatAgentMessages(payload, undefined, tools);
+    expect(result.messages).toHaveLength(4); // user + AIMessage + 2 ToolMessages
+
+    const aiMsg = result.messages[1] as AIMessage;
+    const toolCalls = aiMsg.tool_calls ?? [];
+    expect(toolCalls).toHaveLength(2);
+
+    const ids = toolCalls.map((tc) => tc.id);
+    expect(new Set(ids).size).toBe(2);
+    expect(ids[0]).toBe(duplicateId);
+    expect(ids[1]).toMatch(/^toolu_/);
+    expect(ids[1]).not.toBe(duplicateId);
+
+    expect((result.messages[2] as ToolMessage).tool_call_id).toBe(duplicateId);
+    expect((result.messages[3] as ToolMessage).tool_call_id).toBe(ids[1]);
+  });
+
   it('should handle complex tool calls with multiple steps', () => {
     const payload = [
       {

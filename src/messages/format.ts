@@ -19,6 +19,7 @@ import type {
   TPayload,
   TMessage,
 } from '@/types';
+import { nanoid } from 'nanoid';
 import { Providers, ContentTypes, Constants } from '@/common';
 
 interface MediaMessageParams {
@@ -668,6 +669,57 @@ function extractToolNamesFromSearchOutput(output: string): string[] {
 }
 
 /**
+ * Ensures all tool_call IDs in assistant message content are unique.
+ * Mutates content in place. For duplicates, assigns new IDs and updates tool_call_ids on text parts.
+ */
+function ensureUniqueToolCallIds(
+  content: MessageContentComplex[] | undefined
+): void {
+  if (!content || !Array.isArray(content)) return;
+
+  const seenIds = new Set<string>();
+  const remapMap = new Map<string, string>();
+
+  for (const part of content) {
+    if (part?.type !== ContentTypes.TOOL_CALL || !part.tool_call) continue;
+
+    const tc = part.tool_call as ToolCallPart;
+    const currentId = tc.id ?? '';
+
+    if (!currentId) continue;
+
+    if (seenIds.has(currentId)) {
+      const newId = `toolu_${nanoid()}`;
+      tc.id = newId;
+      remapMap.set(currentId, newId);
+    } else {
+      seenIds.add(currentId);
+    }
+  }
+
+  if (remapMap.size === 0) return;
+
+  const seenInToolCallIds = new Map<string, number>();
+  for (const part of content) {
+    if (part?.type !== ContentTypes.TEXT || !Array.isArray(part.tool_call_ids))
+      continue;
+
+    const ids = part.tool_call_ids as string[];
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      if (!remapMap.has(id)) continue;
+
+      const count = seenInToolCallIds.get(id) ?? 0;
+      if (count >= 1) {
+        ids[i] = remapMap.get(id)!;
+      } else {
+        seenInToolCallIds.set(id, count + 1);
+      }
+    }
+  }
+}
+
+/**
  * Formats an array of messages for LangChain, handling tool calls and creating ToolMessage instances.
  *
  * @param payload - The array of messages to format.
@@ -855,6 +907,8 @@ export const formatAgentMessages = (
         }
       }
     }
+
+    ensureUniqueToolCallIds(processedMessage.content as MessageContentComplex[]);
 
     // Process the assistant message using the helper function
     const formattedMessages = formatAssistantMessage(processedMessage);

@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 /* eslint-disable no-console */
+import { nanoid } from 'nanoid';
 /**
  * This util file contains functions for converting LangChain messages to Anthropic messages.
  */
@@ -346,6 +347,50 @@ const standardContentBlockConverter: StandardContentBlockConverter<{
   },
 };
 
+/**
+ * Ensures all tool_use blocks in content have unique ids.
+ * Mutates blocks in place. Updates tool_result blocks that reference remapped ids.
+ */
+function _deduplicateToolUseIds(
+  blocks: Array<Record<string, unknown> | null>
+): void {
+  const seenIds = new Set<string>();
+  const remapMap = new Map<string, string>();
+
+  for (const block of blocks) {
+    if (!block || typeof block.id !== 'string') continue;
+    if (block.type !== 'tool_use' && block.type !== 'server_tool_use') continue;
+
+    const currentId = block.id;
+    if (seenIds.has(currentId)) {
+      const newId = `toolu_${nanoid()}`;
+      block.id = newId;
+      remapMap.set(currentId, newId);
+    } else {
+      seenIds.add(currentId);
+    }
+  }
+
+  if (remapMap.size === 0) return;
+
+  const seenInToolResults = new Map<string, number>();
+  for (const block of blocks) {
+    if (!block || !('tool_use_id' in block)) continue;
+    if (block.type !== 'tool_result' && block.type !== 'web_search_tool_result')
+      continue;
+
+    const toolUseId = block.tool_use_id as string | undefined;
+    if (!toolUseId || !remapMap.has(toolUseId)) continue;
+
+    const count = seenInToolResults.get(toolUseId) ?? 0;
+    if (count >= 1) {
+      block.tool_use_id = remapMap.get(toolUseId);
+    } else {
+      seenInToolResults.set(toolUseId, count + 1);
+    }
+  }
+}
+
 function _formatContent(message: BaseMessage) {
   const toolTypes = [
     'tool_use',
@@ -592,7 +637,9 @@ function _formatContent(message: BaseMessage) {
         throw new Error('Unsupported message content format');
       }
     });
-    return contentBlocks.filter((block) => block !== null);
+    const filtered = contentBlocks.filter((block) => block !== null);
+    _deduplicateToolUseIds(filtered as Array<Record<string, unknown> | null>);
+    return filtered;
   }
 }
 

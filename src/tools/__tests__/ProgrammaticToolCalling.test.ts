@@ -206,10 +206,10 @@ describe('ProgrammaticToolCalling', () => {
       );
     });
 
-    it('handles MCP-style names with hyphens', () => {
+    it('handles MCP-style names with hyphens and dots', () => {
       expect(
-        normalizeToPythonIdentifier('create_spreadsheet_mcp_Google-Workspace')
-      ).toBe('create_spreadsheet_mcp_Google_Workspace');
+        normalizeToPythonIdentifier('sheets.getText_mcp_Google-Workspace')
+      ).toBe('sheetsgetText_mcp_Google_Workspace');
     });
 
     it('removes invalid characters', () => {
@@ -481,16 +481,16 @@ await calcplus()`;
 
     it('matches hyphenated tool names using underscore in code', () => {
       const mcpTools = createToolMap([
-        'create_spreadsheet_mcp_Google-Workspace',
-        'search_gmail_mcp_Google-Workspace',
+        'sheets.getText_mcp_Google-Workspace',
+        'gmail.search_mcp_Google-Workspace',
       ]);
-      const code = `result = await create_spreadsheet_mcp_Google_Workspace(title="Test")
+      const code = `result = await sheetsgetText_mcp_Google_Workspace(spreadsheetId="abc")
 print(result)`;
 
       const used = extractUsedToolNames(code, mcpTools);
 
       expect(used.size).toBe(1);
-      expect(used.has('create_spreadsheet_mcp_Google-Workspace')).toBe(true);
+      expect(used.has('sheets.getText_mcp_Google-Workspace')).toBe(true);
     });
   });
 

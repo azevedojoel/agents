@@ -29,6 +29,10 @@ export type AnthropicToolChoice =
       type: 'tool';
       name: string;
     }
+  | {
+      type: 'auto' | 'any';
+      disable_parallel_tool_use?: boolean;
+    }
   | 'any'
   | 'auto'
   | 'none'

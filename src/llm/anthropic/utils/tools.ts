@@ -7,6 +7,7 @@ export function handleToolChoice(
   | Anthropic.Messages.ToolChoiceAuto
   | Anthropic.Messages.ToolChoiceAny
   | Anthropic.Messages.ToolChoiceTool
+  | { type: 'auto' | 'any'; disable_parallel_tool_use?: boolean }
   | undefined {
   if (toolChoice == null) {
     return undefined;

@@ -136,5 +136,8 @@ export type ChatModelConstructorMap = {
 export type ChatModelInstance = ChatModelMap[Providers];
 
 export type ModelWithTools = ChatModelInstance & {
-  bindTools(tools: CommonToolType[]): Runnable;
+  bindTools(
+    tools: CommonToolType[],
+    options?: Record<string, unknown>
+  ): Runnable;
 };

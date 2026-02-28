@@ -55,6 +55,7 @@ import {
   isGoogleLike,
   joinKeys,
   sleep,
+  getParallelToolCallDisableOptions,
 } from '@/utils';
 import { getChatModelClass, manualToolStreamProviders } from '@/llm/providers';
 import { ToolNode as CustomToolNode, toolsCondition } from '@/tools/ToolNode';
@@ -569,7 +570,8 @@ export class StandardGraph extends Graph<t.BaseGraphState, t.GraphNode> {
       return model as unknown as Runnable;
     }
 
-    return (model as t.ModelWithTools).bindTools(tools);
+    const bindOptions = getParallelToolCallDisableOptions(provider);
+    return (model as t.ModelWithTools).bindTools(tools, bindOptions);
   }
 
   overrideTestModel(
@@ -878,10 +880,13 @@ export class StandardGraph extends Graph<t.BaseGraphState, t.GraphNode> {
               clientOptions: fb.clientOptions,
             });
             const bindableTools = agentContext.tools;
+            const fallbackBindOptions = getParallelToolCallDisableOptions(
+              fb.provider
+            );
             model = (
               !bindableTools || bindableTools.length === 0
                 ? model
-                : model.bindTools(bindableTools)
+                : model.bindTools(bindableTools, fallbackBindOptions)
             ) as t.ChatModelInstance;
             result = await this.attemptInvoke(
               {

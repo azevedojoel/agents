@@ -11,6 +11,7 @@ import {
   GraphEvents,
   StepTypes,
   Providers,
+  Constants,
 } from '@/common';
 import {
   handleServerToolResult,
@@ -444,7 +445,8 @@ hasToolCallChunks: ${hasToolCallChunks}
 export function createContentAggregator(): t.ContentAggregatorResult {
   const contentParts: Array<t.MessageContentComplex | undefined> = [];
   const stepMap = new Map<string, t.RunStep>();
-  const toolCallIdMap = new Map<string, string>();
+  /** runStepId -> toolCallId[] for parallel delta routing (index -> id) */
+  const toolCallIdMap = new Map<string, string[]>();
   // Track agentId and groupId for each content index (applied to content parts)
   const contentMetaMap = new Map<
     number,
@@ -471,6 +473,38 @@ export function createContentAggregator(): t.ContentAggregatorResult {
     }
 
     if (!partType.startsWith(contentParts[index]?.type ?? '')) {
+      // Index misalignment (e.g. think/text before tool_call or vice versa).
+      if (partType === ContentTypes.TOOL_CALL && 'tool_call' in contentPart) {
+        const tcId = contentPart.tool_call?.id;
+        if (tcId) {
+          const foundIdx = contentParts.findIndex(
+            (p) =>
+              p?.type === ContentTypes.TOOL_CALL &&
+              (p as t.ToolCallContent).tool_call?.id === tcId
+          );
+          if (foundIdx >= 0) {
+            updateContent(foundIdx, contentPart, finalUpdate);
+            return;
+          }
+        }
+        const appendIdx = contentParts.length;
+        updateContent(appendIdx, contentPart, finalUpdate);
+        return;
+      }
+      // Slot has tool_call but we're adding think/text - append at end.
+      // runStep.index is often 0 for final message content, which would wrongly put text before tools.
+      // Correct order: [tool_calls..., think/text]
+      const slotType = contentParts[index]?.type ?? '';
+      if (
+        slotType === ContentTypes.TOOL_CALL &&
+        (partType.startsWith(ContentTypes.THINK) ||
+          partType === ContentTypes.TEXT)
+      ) {
+        const appendIdx = contentParts.length;
+        contentParts.push(undefined);
+        updateContent(appendIdx, contentPart, finalUpdate);
+        return;
+      }
       console.warn('Content type mismatch');
       return;
     }
@@ -528,6 +562,22 @@ export function createContentAggregator(): t.ContentAggregatorResult {
       partType === ContentTypes.TOOL_CALL &&
       'tool_call' in contentPart
     ) {
+      const existingContent = contentParts[index] as
+        | (Omit<t.ToolCallContent, 'tool_call'> & {
+            tool_call?: t.ToolCallPart;
+          })
+        | undefined;
+
+      // Events can arrive out of order. If we already have a completed tool_call (with output),
+      // don't overwrite with incomplete data from ON_RUN_STEP or ON_RUN_STEP_DELTA.
+      if (
+        !finalUpdate &&
+        existingContent?.tool_call?.output != null &&
+        existingContent.tool_call.output !== ''
+      ) {
+        return;
+      }
+
       const incomingName = contentPart.tool_call.name;
       const incomingId = contentPart.tool_call.id;
       const toolCallArgs = (contentPart.tool_call as t.ToolCallPart).args;
@@ -535,18 +585,21 @@ export function createContentAggregator(): t.ContentAggregatorResult {
       // When we receive a tool call with a name, it's the complete tool call
       // Consolidate with any previously accumulated args from chunks
       const hasValidName = incomingName != null && incomingName !== '';
+      const hasArgsToMerge =
+        toolCallArgs != null &&
+        (typeof toolCallArgs === 'string' ? toolCallArgs !== '' : true);
+      const existingHasOutput =
+        existingContent?.tool_call?.output != null &&
+        existingContent.tool_call.output !== '';
+      const isArgsDeltaIntoExisting =
+        existingContent?.tool_call && hasArgsToMerge && !existingHasOutput;
 
-      // Only process if incoming has a valid name (complete tool call)
-      // or if we're doing a final update with complete data
-      if (!hasValidName && !finalUpdate) {
+      // Process when: complete tool call, final update, OR streaming args into existing slot.
+      // ON_RUN_STEP_DELTA often has args but no name - we must merge or we lose them.
+      // Skip args delta if tool already has output - stale deltas arrive after ON_RUN_STEP_COMPLETED.
+      if (!hasValidName && !finalUpdate && !isArgsDeltaIntoExisting) {
         return;
       }
-
-      const existingContent = contentParts[index] as
-        | (Omit<t.ToolCallContent, 'tool_call'> & {
-            tool_call?: t.ToolCallPart;
-          })
-        | undefined;
 
       /** When args are a valid object, they are likely already invoked */
       let args =
@@ -576,7 +629,7 @@ export function createContentAggregator(): t.ContentAggregatorResult {
         | undefined;
       const authStr =
         getNonEmptyValue(
-          [incomingAuth, existingAuth].filter(Boolean) as string[],
+          [incomingAuth, existingAuth].filter(Boolean) as string[]
         ) ?? '';
       const expiresAtVal =
         (contentPart.tool_call as { expires_at?: number }).expires_at ??
@@ -596,6 +649,19 @@ export function createContentAggregator(): t.ContentAggregatorResult {
       if (finalUpdate) {
         newToolCall.progress = 1;
         newToolCall.output = contentPart.tool_call.output;
+      }
+
+      const isToolSearch =
+        name === Constants.TOOL_SEARCH ||
+        (typeof name === 'string' && name.startsWith('tool_search_mcp_'));
+      if (isToolSearch) {
+        const argsPreview =
+          typeof args === 'string'
+            ? args.slice(0, 200) + (args.length > 200 ? '...' : '')
+            : JSON.stringify(args ?? {}).slice(0, 200);
+        console.debug(
+          `[contentAggregator] tool_search args UPDATE index=${index} finalUpdate=${finalUpdate} args=${argsPreview}`
+        );
       }
 
       contentParts[index] = {
@@ -632,32 +698,24 @@ export function createContentAggregator(): t.ContentAggregatorResult {
       const runStep = data as t.RunStep;
       stepMap.set(runStep.id, runStep);
 
-      // Track agentId (MultiAgentGraph) and groupId (parallel execution) separately
-      // - agentId: present for all MultiAgentGraph runs (enables agent labels in UI)
-      // - groupId: present only for parallel execution (enables column rendering)
-      const hasAgentId = runStep.agentId != null && runStep.agentId !== '';
-      const hasGroupId = runStep.groupId != null;
-      if (hasAgentId || hasGroupId) {
-        const existingMeta = contentMetaMap.get(runStep.index) ?? {};
-        if (hasAgentId) {
-          existingMeta.agentId = runStep.agentId;
-        }
-        if (hasGroupId) {
-          existingMeta.groupId = runStep.groupId;
-        }
-        contentMetaMap.set(runStep.index, existingMeta);
-      }
-
       // Store tool call IDs if present
       if (
         runStep.stepDetails.type === StepTypes.TOOL_CALLS &&
         runStep.stepDetails.tool_calls
       ) {
-        (runStep.stepDetails.tool_calls as ToolCall[]).forEach((toolCall) => {
+        const hasAgentId = runStep.agentId != null && runStep.agentId !== '';
+        const hasGroupId = runStep.groupId != null;
+
+        const stepCalls = runStep.stepDetails.tool_calls as ToolCall[];
+        const toolCallIds = stepCalls
+          .map((tc) => tc.id ?? '')
+          .filter((id) => id !== '');
+        if (toolCallIds.length > 0) {
+          toolCallIdMap.set(runStep.id, toolCallIds);
+        }
+
+        stepCalls.forEach((toolCall) => {
           const toolCallId = toolCall.id ?? '';
-          if ('id' in toolCall && toolCallId) {
-            toolCallIdMap.set(runStep.id, toolCallId);
-          }
           const contentPart: t.MessageContentComplex = {
             type: ContentTypes.TOOL_CALL,
             tool_call: {
@@ -667,7 +725,42 @@ export function createContentAggregator(): t.ContentAggregatorResult {
             },
           };
 
-          updateContent(runStep.index, contentPart);
+          // Never use runStep.index for tool_calls - it misaligns when think/text are interleaved.
+          // Always find by id or append.
+          let targetIndex = contentParts.findIndex(
+            (p) =>
+              p?.type === ContentTypes.TOOL_CALL &&
+              (p as t.ToolCallContent).tool_call?.id === toolCallId
+          );
+          if (targetIndex < 0) {
+            targetIndex = contentParts.length;
+          }
+          if (hasAgentId || hasGroupId) {
+            const meta = contentMetaMap.get(targetIndex) ?? {};
+            if (hasAgentId) meta.agentId = runStep.agentId;
+            if (hasGroupId) meta.groupId = runStep.groupId;
+            contentMetaMap.set(targetIndex, meta);
+          }
+          const tcName = toolCall.name ?? '';
+          if (
+            tcName === Constants.TOOL_SEARCH ||
+            (typeof tcName === 'string' &&
+              tcName.startsWith('tool_search_mcp_'))
+          ) {
+            const argsRaw = toolCall.args as
+              | string
+              | Record<string, unknown>
+              | undefined;
+            const argsPreview =
+              typeof argsRaw === 'string'
+                ? argsRaw.slice(0, 150)
+                : JSON.stringify(argsRaw ?? {}).slice(0, 150);
+            console.debug(
+              `[contentAggregator] ON_RUN_STEP tool_search -> updateContent targetIndex=${targetIndex} args=`,
+              argsPreview
+            );
+          }
+          updateContent(targetIndex, contentPart);
         });
       }
     } else if (event === GraphEvents.ON_MESSAGE_DELTA) {
@@ -683,6 +776,12 @@ export function createContentAggregator(): t.ContentAggregatorResult {
           ? messageDelta.delta.content[0]
           : messageDelta.delta.content;
 
+        if (runStep.agentId != null || runStep.groupId != null) {
+          const meta = contentMetaMap.get(runStep.index) ?? {};
+          if (runStep.agentId != null) meta.agentId = runStep.agentId;
+          if (runStep.groupId != null) meta.groupId = runStep.groupId;
+          contentMetaMap.set(runStep.index, meta);
+        }
         updateContent(runStep.index, contentPart);
       }
     } else if (
@@ -707,6 +806,12 @@ export function createContentAggregator(): t.ContentAggregatorResult {
           ? reasoningDelta.delta.content[0]
           : reasoningDelta.delta.content;
 
+        if (runStep.agentId != null || runStep.groupId != null) {
+          const meta = contentMetaMap.get(runStep.index) ?? {};
+          if (runStep.agentId != null) meta.agentId = runStep.agentId;
+          if (runStep.groupId != null) meta.groupId = runStep.groupId;
+          contentMetaMap.set(runStep.index, meta);
+        }
         updateContent(runStep.index, contentPart);
       }
     } else if (event === GraphEvents.ON_RUN_STEP_DELTA) {
@@ -722,15 +827,30 @@ export function createContentAggregator(): t.ContentAggregatorResult {
         runStepDelta.delta.tool_calls
       ) {
         runStepDelta.delta.tool_calls.forEach((toolCallDelta) => {
-          // Prefer delta's id (map overwrites for multi-tool steps)
+          // Resolve toolCallId: delta id > toolCallIdMap[index] > runStep.tool_calls[index]
+          const mappedIds = toolCallIdMap.get(runStepDelta.id);
+          const stepCalls =
+            runStep.stepDetails.type === StepTypes.TOOL_CALLS
+              ? (runStep.stepDetails.tool_calls as ToolCall[])
+              : undefined;
           const toolCallId =
-            toolCallDelta.id ?? toolCallIdMap.get(runStepDelta.id) ?? '';
+            toolCallDelta.id ??
+            (typeof toolCallDelta.index === 'number' && mappedIds
+              ? mappedIds[toolCallDelta.index]
+              : undefined) ??
+            (typeof toolCallDelta.index === 'number'
+              ? stepCalls?.[toolCallDelta.index]?.id
+              : undefined) ??
+            '';
           const deltaAuth =
-            (runStepDelta.delta as { auth?: string; expires_at?: number }).auth ??
+            (runStepDelta.delta as { auth?: string; expires_at?: number })
+              .auth ??
             (toolCallDelta as { auth?: string; expires_at?: number }).auth;
           const deltaExpiresAt =
             (runStepDelta.delta as { auth?: string; expires_at?: number })
-              .expires_at ?? (toolCallDelta as { auth?: string; expires_at?: number }).expires_at;
+              .expires_at ??
+            (toolCallDelta as { auth?: string; expires_at?: number })
+              .expires_at;
 
           const contentPart: t.MessageContentComplex = {
             type: ContentTypes.TOOL_CALL,
@@ -743,42 +863,53 @@ export function createContentAggregator(): t.ContentAggregatorResult {
             },
           };
 
-          // Resolve index: runStep.index can misalign when think/text are interleaved.
-          // Find matching tool call by id/name to avoid "Content type mismatch".
+          // Never use runStep.index for tool_calls - it misaligns when think/text are interleaved.
+          // Always find by id or append.
+          let targetIndex = contentParts.findIndex(
+            (part) =>
+              part?.type === ContentTypes.TOOL_CALL &&
+              (part as t.ToolCallContent).tool_call?.id === toolCallId
+          );
+          if (targetIndex < 0) {
+            targetIndex = contentParts.length;
+          }
           const deltaName = toolCallDelta.name ?? '';
-          let targetIndex = runStep.index;
-          const foundIdx = contentParts.findIndex((part) => {
-            const tc =
-              part?.type === ContentTypes.TOOL_CALL
-                ? (part as t.ToolCallContent).tool_call
-                : undefined;
-            if (!tc) return false;
-            return (
-              (toolCallId && tc.id === toolCallId) ||
-              (deltaName && tc.name === deltaName) ||
-              (deltaName && tc.name?.includes(deltaName))
+          const existingAtTarget = contentParts[targetIndex] as
+            | t.ToolCallContent
+            | undefined;
+          const existingName = existingAtTarget?.tool_call?.name ?? '';
+          const isToolSearchDelta =
+            deltaName === Constants.TOOL_SEARCH ||
+            (typeof deltaName === 'string' &&
+              deltaName.startsWith('tool_search_mcp_')) ||
+            existingName === Constants.TOOL_SEARCH ||
+            (typeof existingName === 'string' &&
+              existingName.startsWith('tool_search_mcp_'));
+          if (isToolSearchDelta) {
+            const argsRaw = toolCallDelta.args as
+              | string
+              | Record<string, unknown>
+              | undefined;
+            const argsPreview =
+              typeof argsRaw === 'string'
+                ? argsRaw.slice(0, 150)
+                : JSON.stringify(argsRaw ?? {}).slice(0, 150);
+            console.debug(
+              `[contentAggregator] ON_RUN_STEP_DELTA tool_search -> updateContent targetIndex=${targetIndex} args=${argsPreview}`
             );
-          });
-          if (foundIdx >= 0) targetIndex = foundIdx;
-
+          }
           updateContent(targetIndex, contentPart);
         });
       }
     } else if (event === GraphEvents.ON_RUN_STEP_COMPLETED) {
       const { result } = data as unknown as { result: t.ToolEndEvent };
 
-      const { id: stepId } = result;
+      const toolCallId = result.tool_call.id;
 
+      // Never use runStep.index - it misaligns when think/text are interleaved.
+      // Always find by id or append.
       let targetIndex: number | undefined;
-
-      const runStep = stepMap.get(stepId);
-      if (runStep) {
-        targetIndex = runStep.index;
-      } else if (typeof result.index === 'number') {
-        targetIndex = result.index;
-      } else {
-        const toolCallId = result.tool_call?.id;
-        const toolCallName = result.tool_call?.name;
+      if (toolCallId) {
         for (let i = 0; i < contentParts.length; i++) {
           const part = contentParts[i];
           const tc =
@@ -788,23 +919,14 @@ export function createContentAggregator(): t.ContentAggregatorResult {
           if (!tc) continue;
           const hasOutput = tc.output != null && tc.output !== '';
           if (hasOutput) continue;
-          if (toolCallId && tc.id === toolCallId) {
-            targetIndex = i;
-            break;
-          }
-          if (toolCallName && tc.name === toolCallName) {
+          if (tc.id === toolCallId) {
             targetIndex = i;
             break;
           }
         }
       }
-
       if (targetIndex == null) {
-        console.warn(
-          'No run step or runId found for completed tool call event',
-          { stepId, toolName: result.tool_call?.name }
-        );
-        return;
+        targetIndex = contentParts.length;
       }
 
       const contentPart: t.MessageContentComplex = {

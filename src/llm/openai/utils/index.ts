@@ -311,7 +311,7 @@ export function _convertMessagesToOpenAIParams(
 
     let hasAnthropicThinkingBlock: boolean = false;
 
-    const content =
+    const rawContent =
       typeof message.content === 'string'
         ? message.content
         : message.content.map((m) => {
@@ -327,6 +327,24 @@ export function _convertMessagesToOpenAIParams(
           }
           return m;
         });
+
+    // Filter out empty text blocks - API rejects "text content blocks must be non-empty"
+    const content =
+      typeof rawContent === 'string'
+        ? rawContent
+        : rawContent.filter((m) => {
+          if (
+            m &&
+              typeof m === 'object' &&
+              'type' in m &&
+              m.type === 'text'
+          ) {
+            const text = (m as { text?: string }).text;
+            return text != null && text !== '';
+          }
+          return true;
+        });
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const completionParam: Record<string, any> = {
       role,

@@ -637,7 +637,21 @@ function _formatContent(message: BaseMessage) {
         throw new Error('Unsupported message content format');
       }
     });
-    const filtered = contentBlocks.filter((block) => block !== null);
+    const filtered = contentBlocks
+      .filter((block) => block !== null)
+      .filter((block) => {
+        // API rejects "text content blocks must not be empty"
+        if (
+          block &&
+          typeof block === 'object' &&
+          'type' in block &&
+          block.type === 'text'
+        ) {
+          const text = (block as { text?: string }).text;
+          return text != null && text !== '';
+        }
+        return true;
+      });
     _deduplicateToolUseIds(filtered as Array<Record<string, unknown> | null>);
     return filtered;
   }

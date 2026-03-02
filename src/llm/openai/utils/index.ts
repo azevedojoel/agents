@@ -329,10 +329,19 @@ export function _convertMessagesToOpenAIParams(
         });
 
     // Filter out empty text blocks - API rejects "text content blocks must be non-empty"
+    // Filter out Anthropic thinking blocks - OpenAI API only supports: text, image_url, input_audio, refusal, audio, file
     const content =
       typeof rawContent === 'string'
         ? rawContent
         : rawContent.filter((m) => {
+          if (
+            m &&
+              typeof m === 'object' &&
+              'type' in m &&
+              (m.type === 'thinking' || m.type === 'redacted_thinking')
+          ) {
+            return false;
+          }
           if (
             m &&
               typeof m === 'object' &&
@@ -361,7 +370,12 @@ export function _convertMessagesToOpenAIParams(
       completionParam.tool_calls = message.tool_calls.map(
         convertLangChainToolCallToOpenAI
       );
-      completionParam.content = hasAnthropicThinkingBlock ? content : '';
+      completionParam.content =
+        hasAnthropicThinkingBlock &&
+        Array.isArray(content) &&
+        content.length > 0
+          ? content
+          : '';
       if (
         options?.includeReasoningContent === true &&
         message.additional_kwargs.reasoning_content != null

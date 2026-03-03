@@ -13,10 +13,6 @@ export const getCodeBaseURL = (): string =>
   getEnvironmentVariable(EnvVar.CODE_BASEURL) ??
   Constants.OFFICIAL_CODE_BASEURL;
 
-const imageMessage = 'Image is already displayed to the user';
-const otherMessage = 'File is already downloaded by the user';
-const accessMessage =
-  'Note: Files from previous executions are automatically available and can be modified.';
 const emptyOutputMessage =
   'stdout: Empty. Ensure you\'re writing output explicitly.\n';
 
@@ -80,7 +76,7 @@ Runs code and returns stdout/stderr output from a stateless execution environmen
 
 Usage:
 - No network access available.
-- Generated files are automatically delivered; **DO NOT** provide download links.
+- To deliver files to the user, use workspace_send_file_to_user after saving them.
 - NEVER use this tool to execute malicious code.
 `.trim();
 
@@ -206,30 +202,6 @@ function createCodeExecutionTool(
           formattedOutput += emptyOutputMessage;
         }
         if (result.stderr) formattedOutput += `stderr:\n${result.stderr}\n`;
-        if (result.files && result.files.length > 0) {
-          formattedOutput += 'Generated files:\n';
-
-          const fileCount = result.files.length;
-          for (let i = 0; i < fileCount; i++) {
-            const file = result.files[i];
-            const isImage = imageExtRegex.test(file.name);
-            formattedOutput += `- /mnt/data/${file.name} | ${isImage ? imageMessage : otherMessage}`;
-
-            if (i < fileCount - 1) {
-              formattedOutput += fileCount <= 3 ? ', ' : ',\n';
-            }
-          }
-
-          formattedOutput += `\n\n${accessMessage}`;
-          return [
-            formattedOutput.trim(),
-            {
-              session_id: result.session_id,
-              files: result.files,
-            },
-          ];
-        }
-
         return [formattedOutput.trim(), { session_id: result.session_id }];
       } catch (error) {
         throw new Error(

@@ -20,7 +20,8 @@ import type { BaseMessage, AIMessageChunk } from '@langchain/core/messages';
 import type { ToolRunnableConfig } from '@langchain/core/tools';
 import type * as t from '@/types';
 import { StandardGraph } from './Graph';
-import { Constants } from '@/common';
+import { Constants, GraphEvents } from '@/common';
+import { safeDispatchCustomEvent } from '@/utils/events';
 
 /** Pattern to extract instructions from transfer ToolMessage content */
 const HANDOFF_INSTRUCTIONS_PATTERN = /(?:Instructions?|Context):\s*(.+)/is;
@@ -263,6 +264,40 @@ export class MultiAgentGraph extends StandardGraph {
     }
   }
 
+  /** Base schema properties for return_control and return_to (shared by all handoff tools) */
+  private static readonly HANDOFF_RETURN_SCHEMA = {
+    return_control: {
+      type: 'boolean' as const,
+      description:
+        'When true, transfer control back to the caller after completing the task',
+    },
+    return_to: {
+      type: 'string' as const,
+      description:
+        'Agent ID to return control to. Defaults to the caller when return_control is true.',
+    },
+  };
+
+  /**
+   * Build schema for handoff tools, including optional instructions and return_control params.
+   */
+  private buildHandoffToolSchema(
+    hasHandoffInput: boolean,
+    promptKey: string,
+    handoffInputDescription: string,
+  ): { type: 'object'; properties: Record<string, unknown>; required: string[] } {
+    const properties: Record<string, unknown> = {
+      ...MultiAgentGraph.HANDOFF_RETURN_SCHEMA,
+    };
+    if (hasHandoffInput) {
+      properties[promptKey] = {
+        type: 'string',
+        description: handoffInputDescription,
+      };
+    }
+    return { type: 'object', properties, required: [] };
+  }
+
   /**
    * Create handoff tools for an edge (handles multiple destinations)
    * @param edge - The graph edge defining the handoff
@@ -322,6 +357,14 @@ export class MultiAgentGraph extends StandardGraph {
               content += `\n\n${promptKey.charAt(0).toUpperCase() + promptKey.slice(1)}: ${input[promptKey]}`;
             }
 
+            const returnControl = input.return_control === true;
+            const returnTo =
+              typeof input.return_to === 'string' && input.return_to.trim()
+                ? input.return_to.trim()
+                : returnControl
+                  ? sourceAgentId
+                  : undefined;
+
             const toolMessage = new ToolMessage({
               content,
               name: toolName,
@@ -329,8 +372,11 @@ export class MultiAgentGraph extends StandardGraph {
               additional_kwargs: {
                 /** Store destination for programmatic access in handoff detection */
                 handoff_destination: destination,
-                /** Store source agent name for receiving agent to know who handed off */
+                /** Store source agent name and ID for receiving agent to know who handed off */
                 handoff_source_name: sourceAgentName,
+                handoff_source_id: sourceAgentId,
+                handoff_return_control: returnControl,
+                handoff_return_to: returnTo,
               },
             });
 
@@ -342,18 +388,11 @@ export class MultiAgentGraph extends StandardGraph {
           },
           {
             name: toolName,
-            schema: hasHandoffInput
-              ? {
-                type: 'object',
-                properties: {
-                  [promptKey]: {
-                    type: 'string',
-                    description: handoffInputDescription as string,
-                  },
-                },
-                required: [],
-              }
-              : { type: 'object', properties: {}, required: [] },
+            schema: this.buildHandoffToolSchema(
+              hasHandoffInput,
+              promptKey,
+              handoffInputDescription as string,
+            ),
             description: toolDescription,
           }
         )
@@ -390,13 +429,24 @@ export class MultiAgentGraph extends StandardGraph {
                 content += `\n\n${promptKey.charAt(0).toUpperCase() + promptKey.slice(1)}: ${input[promptKey]}`;
               }
 
+              const returnControl = input.return_control === true;
+              const returnTo =
+                typeof input.return_to === 'string' && input.return_to.trim()
+                  ? input.return_to.trim()
+                  : returnControl
+                    ? sourceAgentId
+                    : undefined;
+
               const toolMessage = new ToolMessage({
                 content,
                 name: toolName,
                 tool_call_id: toolCallId,
                 additional_kwargs: {
-                  /** Store source agent name for receiving agent to know who handed off */
+                  /** Store source agent name and ID for receiving agent to know who handed off */
                   handoff_source_name: sourceAgentName,
+                  handoff_source_id: sourceAgentId,
+                  handoff_return_control: returnControl,
+                  handoff_return_to: returnTo,
                 },
               });
 
@@ -474,18 +524,11 @@ export class MultiAgentGraph extends StandardGraph {
             },
             {
               name: toolName,
-              schema: hasHandoffInput
-                ? {
-                  type: 'object',
-                  properties: {
-                    [promptKey]: {
-                      type: 'string',
-                      description: handoffInputDescription as string,
-                    },
-                  },
-                  required: [],
-                }
-                : { type: 'object', properties: {}, required: [] },
+              schema: this.buildHandoffToolSchema(
+                hasHandoffInput,
+                promptKey,
+                handoffInputDescription as string,
+              ),
               description: toolDescription,
             }
           )
@@ -514,7 +557,7 @@ export class MultiAgentGraph extends StandardGraph {
    *
    * @param messages - Current state messages
    * @param agentId - The agent ID to check for handoff reception
-   * @returns Object with filtered messages, extracted instructions, source agent, and parallel siblings
+   * @returns Object with filtered messages, extracted instructions, source agent, parallel siblings, and return_control info
    */
   private processHandoffReception(
     messages: BaseMessage[],
@@ -524,6 +567,8 @@ export class MultiAgentGraph extends StandardGraph {
     instructions: string | null;
     sourceAgentName: string | null;
     parallelSiblings: string[];
+    returnControl: boolean;
+    returnTo: string | null;
   } | null {
     if (messages.length === 0) return null;
 
@@ -580,10 +625,13 @@ export class MultiAgentGraph extends StandardGraph {
     const instructionsMatch = contentStr.match(HANDOFF_INSTRUCTIONS_PATTERN);
     const instructions = instructionsMatch?.[1]?.trim() ?? null;
 
-    /** Extract source agent name from additional_kwargs */
+    /** Extract source agent name and ID from additional_kwargs */
     const handoffSourceName = toolMessage.additional_kwargs.handoff_source_name;
     const sourceAgentName =
       typeof handoffSourceName === 'string' ? handoffSourceName : null;
+    const handoffSourceId = toolMessage.additional_kwargs.handoff_source_id;
+    const sourceAgentId =
+      typeof handoffSourceId === 'string' ? handoffSourceId : null;
 
     /** Extract parallel siblings (set by ToolNode for parallel handoffs) */
     const rawSiblings = toolMessage.additional_kwargs.handoff_parallel_siblings;
@@ -595,6 +643,17 @@ export class MultiAgentGraph extends StandardGraph {
       const ctx = this.agentContexts.get(id);
       return ctx?.name ?? id;
     });
+
+    /** Extract return_control and return_to for automatic transfer-back on completion */
+    const returnControl =
+      toolMessage.additional_kwargs.handoff_return_control === true;
+    const rawReturnTo = toolMessage.additional_kwargs.handoff_return_to;
+    const explicitReturnTo =
+      typeof rawReturnTo === 'string' && rawReturnTo.trim()
+        ? rawReturnTo.trim()
+        : null;
+    const returnTo =
+      explicitReturnTo ?? (returnControl ? sourceAgentId : null);
 
     /** Get the tool_call_id to find and filter the AI message's tool call */
     const toolCallId = toolMessage.tool_call_id;
@@ -674,6 +733,8 @@ export class MultiAgentGraph extends StandardGraph {
       instructions,
       sourceAgentName,
       parallelSiblings,
+      returnControl,
+      returnTo,
     };
   }
 
@@ -768,6 +829,8 @@ export class MultiAgentGraph extends StandardGraph {
             instructions,
             sourceAgentName,
             parallelSiblings,
+            returnControl,
+            returnTo,
           } = handoffContext;
 
           /**
@@ -903,6 +966,48 @@ export class MultiAgentGraph extends StandardGraph {
           };
         } else {
           result = await agentSubgraph.invoke(state, config);
+        }
+
+        /**
+         * Return-control: when the agent received a handoff with return_control=true
+         * and completed (did not hand off again), transfer back to the caller with output.
+         * Skip for parallel handoffs.
+         */
+        if (
+          handoffContext != null &&
+          handoffContext.returnControl === true &&
+          handoffContext.returnTo != null &&
+          (handoffContext.parallelSiblings?.length ?? 0) === 0 &&
+          this.agentContexts.has(handoffContext.returnTo)
+        ) {
+          const lastMessage = result.messages[
+            result.messages.length - 1
+          ] as BaseMessage | null;
+          const agentHandedOff =
+            lastMessage != null &&
+            lastMessage.getType() === 'tool' &&
+            typeof lastMessage.name === 'string' &&
+            lastMessage.name.startsWith(Constants.LC_TRANSFER_TO_);
+
+          if (!agentHandedOff) {
+            const output = getBufferString(
+              result.messages.slice(this.startIndex)
+            );
+            const agentName =
+              this.agentContexts.get(agentId)?.name ?? agentId;
+            const returnMessage = new HumanMessage(
+              `--- Returned from ${agentName} ---\n\n${output}`
+            );
+            await safeDispatchCustomEvent(
+              GraphEvents.ON_HANDOFF,
+              { destinationAgentId: handoffContext.returnTo, sourceAgentId: agentId },
+              config
+            );
+            return new Command({
+              goto: handoffContext.returnTo,
+              update: { messages: result.messages.concat(returnMessage) },
+            });
+          }
         }
 
         /** If agent has both handoff and direct edges, use Command for exclusive routing */

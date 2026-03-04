@@ -15,6 +15,8 @@ export enum GraphEvents {
   ON_RUN_STEP_DELTA = 'on_run_step_delta',
   /** [Custom] Completed event for run steps (tool calls) */
   ON_RUN_STEP_COMPLETED = 'on_run_step_completed',
+  /** [Custom] Delta event for tool output (streaming tool results) */
+  ON_TOOL_OUTPUT_DELTA = 'on_tool_output_delta',
   /** [Custom] Delta events for messages */
   ON_MESSAGE_DELTA = 'on_message_delta',
   /** [Custom] Reasoning Delta events for messages */
@@ -125,6 +127,8 @@ export enum ContentTypes {
   REASONING = 'reasoning',
   /** Multi-Agent Switch */
   AGENT_UPDATE = 'agent_update',
+  /** Return control from handoff agent */
+  AGENT_RETURN = 'agent_return',
   /** Bedrock */
   REASONING_CONTENT = 'reasoning_content',
 }

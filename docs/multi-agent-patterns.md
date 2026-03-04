@@ -148,6 +148,7 @@ const edges = [
 
 3. **Tool Creation**:
    - Handoff edges create transfer tools (e.g., `transfer_to_agent_name`)
+   - Each transfer tool accepts optional `return_control` (boolean) and `return_to` (agent ID) parameters. When `return_control: true`, the receiving agent completes its task and control automatically transfers back to the caller (or `return_to`) with the output. Use for multi-step workflows (e.g., Ellis → Casey → Ellis → Coder).
    - Parallel edges create direct graph connections (no tools)
 
 4. **Performance**: Parallel execution can significantly speed up processing when agents perform independent work.

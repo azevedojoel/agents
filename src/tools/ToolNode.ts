@@ -189,6 +189,23 @@ export class ToolNode<T = any> extends RunnableCallable<T, T> {
         }
       }
 
+      /** Inject streaming callback for generate_code tool output */
+      if (call.name === 'generate_code') {
+        const emitToolOutputDelta = config.configurable?.emitToolOutputDelta as
+          | ((toolCallId: string, stepId: string | undefined, delta: string) => void)
+          | undefined;
+        if (typeof emitToolOutputDelta === 'function') {
+          invokeParams._emitToolOutputDelta = emitToolOutputDelta;
+          invokeParams._toolCallId = call.id;
+          invokeParams._stepId = stepId;
+          if (process.env.NODE_ENV === 'development') {
+            console.debug(
+              `[ToolNode] generate_code streaming injected toolCallId=${call.id ?? '?'} stepId=${stepId ?? '?'}`,
+            );
+          }
+        }
+      }
+
       const output = await tool.invoke(invokeParams, config);
       if (
         (isBaseMessage(output) && output._getType() === 'tool') ||

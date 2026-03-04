@@ -505,6 +505,53 @@ export function createContentAggregator(): t.ContentAggregatorResult {
         updateContent(appendIdx, contentPart, finalUpdate);
         return;
       }
+      // Slot has think/reasoning but we're adding text (think→text transition).
+      // Only merge into text that comes AFTER the last think (same turn); else append.
+      // Note: Assumes sequential agent order. For parallel agents, think parts may interleave;
+      // monitor if issues arise.
+      const isThinkSlot =
+        slotType === ContentTypes.THINK ||
+        (typeof slotType === 'string' &&
+          (slotType.startsWith(ContentTypes.THINK) ||
+            slotType.startsWith(ContentTypes.REASONING) ||
+            slotType === ContentTypes.REASONING_CONTENT));
+      if (
+        isThinkSlot &&
+        (partType === ContentTypes.TEXT ||
+          (typeof partType === 'string' && partType.startsWith(ContentTypes.TEXT)))
+      ) {
+        let lastThinkIdx = -1;
+        for (let i = contentParts.length - 1; i >= 0; i--) {
+          const pt = contentParts[i]?.type;
+          if (
+            pt === ContentTypes.THINK ||
+            (typeof pt === 'string' &&
+              (pt.startsWith(ContentTypes.THINK) ||
+                pt.startsWith(ContentTypes.REASONING) ||
+                pt === ContentTypes.REASONING_CONTENT))
+          ) {
+            lastThinkIdx = i;
+            break;
+          }
+        }
+        let textIdx = -1;
+        for (let i = contentParts.length - 1; i > lastThinkIdx; i--) {
+          const pType = contentParts[i]?.type;
+          if (
+            pType === ContentTypes.TEXT ||
+            (typeof pType === 'string' && pType.startsWith(ContentTypes.TEXT))
+          ) {
+            textIdx = i;
+            break;
+          }
+        }
+        if (textIdx < 0) {
+          textIdx = contentParts.length;
+          contentParts.push(undefined);
+        }
+        updateContent(textIdx, contentPart, finalUpdate);
+        return;
+      }
       console.warn('Content type mismatch');
       return;
     }
@@ -547,6 +594,15 @@ export function createContentAggregator(): t.ContentAggregatorResult {
       };
 
       contentParts[index] = update;
+    } else if (
+      partType.startsWith(ContentTypes.AGENT_RETURN) &&
+      'agent_return' in contentPart &&
+      contentPart.agent_return
+    ) {
+      contentParts[index] = {
+        type: ContentTypes.AGENT_RETURN,
+        agent_return: contentPart.agent_return,
+      };
     } else if (
       partType === ContentTypes.IMAGE_URL &&
       'image_url' in contentPart
@@ -692,7 +748,8 @@ export function createContentAggregator(): t.ContentAggregatorResult {
       | t.AgentUpdate
       | t.MessageDeltaEvent
       | t.RunStepDeltaEvent
-      | { result: t.ToolEndEvent };
+      | { result: t.ToolEndEvent }
+      | t.ToolOutputDeltaData;
   }): void => {
     if (event === GraphEvents.ON_RUN_STEP) {
       const runStep = data as t.RunStep;
@@ -776,13 +833,54 @@ export function createContentAggregator(): t.ContentAggregatorResult {
           ? messageDelta.delta.content[0]
           : messageDelta.delta.content;
 
+        // Find last agent_return - text after it is "in scope"; text before is from a prior turn.
+        let lastAgentReturnIdx = -1;
+        for (let i = contentParts.length - 1; i >= 0; i--) {
+          if (contentParts[i]?.type === ContentTypes.AGENT_RETURN) {
+            lastAgentReturnIdx = i;
+            break;
+          }
+        }
+        // Find last text part AFTER agent_return (or any text if no agent_return yet).
+        let targetIndex = -1;
+        for (let i = contentParts.length - 1; i > lastAgentReturnIdx; i--) {
+          const pType = contentParts[i]?.type;
+          if (
+            pType === ContentTypes.TEXT ||
+            (typeof pType === 'string' && pType.startsWith(ContentTypes.TEXT))
+          ) {
+            targetIndex = i;
+            break;
+          }
+        }
+        if (targetIndex < 0) {
+          targetIndex = contentParts.length;
+          contentParts.push(undefined);
+        } else {
+          // AgentId-based split: when agent changes, start a new text block.
+          // Also append when lastAgentId exists but runStep.agentId is undefined (conservative:
+          // don't merge into a known agent's text when current agent is unknown).
+          const lastTextMeta = contentMetaMap.get(targetIndex);
+          const lastAgentId = lastTextMeta?.agentId;
+          const agentChanged =
+            runStep.agentId != null &&
+            lastAgentId != null &&
+            runStep.agentId !== lastAgentId;
+          const unknownAgentMergingIntoKnown =
+            lastAgentId != null && runStep.agentId == null;
+          if (agentChanged || unknownAgentMergingIntoKnown) {
+            targetIndex = contentParts.length;
+            contentParts.push(undefined);
+          }
+        }
+
         if (runStep.agentId != null || runStep.groupId != null) {
-          const meta = contentMetaMap.get(runStep.index) ?? {};
+          const meta = contentMetaMap.get(targetIndex) ?? {};
           if (runStep.agentId != null) meta.agentId = runStep.agentId;
           if (runStep.groupId != null) meta.groupId = runStep.groupId;
-          contentMetaMap.set(runStep.index, meta);
+          contentMetaMap.set(targetIndex, meta);
         }
-        updateContent(runStep.index, contentPart);
+        updateContent(targetIndex, contentPart);
       }
     } else if (
       event === GraphEvents.ON_AGENT_UPDATE &&
@@ -806,13 +904,56 @@ export function createContentAggregator(): t.ContentAggregatorResult {
           ? reasoningDelta.delta.content[0]
           : reasoningDelta.delta.content;
 
+        // Never use runStep.index for think - it increments per delta and creates many parts.
+        // Find last agent_return - think after it is "in scope"; think before it is from a prior turn.
+        let lastAgentReturnIdx = -1;
+        for (let i = contentParts.length - 1; i >= 0; i--) {
+          if (contentParts[i]?.type === ContentTypes.AGENT_RETURN) {
+            lastAgentReturnIdx = i;
+            break;
+          }
+        }
+        // Find last think part AFTER agent_return (or any think if no agent_return yet).
+        let targetIndex = -1;
+        for (let i = contentParts.length - 1; i > lastAgentReturnIdx; i--) {
+          const p = contentParts[i];
+          const pType = p?.type;
+          if (
+            pType === ContentTypes.THINK ||
+            (typeof pType === 'string' &&
+              (pType.startsWith(ContentTypes.THINK) ||
+                pType.startsWith(ContentTypes.REASONING) ||
+                pType === ContentTypes.REASONING_CONTENT))
+          ) {
+            targetIndex = i;
+            break;
+          }
+        }
+        if (targetIndex < 0) {
+          targetIndex = contentParts.length;
+          contentParts.push(undefined);
+        } else {
+          // AgentId-based split: when agent changes (e.g. Ellis -> Casey), start a new think block.
+          // Fallback when agent_return is absent (e.g. transfer without return_control).
+          const lastThinkMeta = contentMetaMap.get(targetIndex);
+          const lastAgentId = lastThinkMeta?.agentId;
+          if (
+            runStep.agentId != null &&
+            lastAgentId != null &&
+            runStep.agentId !== lastAgentId
+          ) {
+            targetIndex = contentParts.length;
+            contentParts.push(undefined);
+          }
+        }
+
         if (runStep.agentId != null || runStep.groupId != null) {
-          const meta = contentMetaMap.get(runStep.index) ?? {};
+          const meta = contentMetaMap.get(targetIndex) ?? {};
           if (runStep.agentId != null) meta.agentId = runStep.agentId;
           if (runStep.groupId != null) meta.groupId = runStep.groupId;
-          contentMetaMap.set(runStep.index, meta);
+          contentMetaMap.set(targetIndex, meta);
         }
-        updateContent(runStep.index, contentPart);
+        updateContent(targetIndex, contentPart);
       }
     } else if (event === GraphEvents.ON_RUN_STEP_DELTA) {
       const runStepDelta = data as t.RunStepDeltaEvent;
@@ -901,13 +1042,37 @@ export function createContentAggregator(): t.ContentAggregatorResult {
           updateContent(targetIndex, contentPart);
         });
       }
+    } else if (event === GraphEvents.ON_TOOL_OUTPUT_DELTA) {
+      const deltaData = data as t.ToolOutputDeltaData;
+      const { tool_call_id: toolCallId, delta } = deltaData;
+      if (!toolCallId || delta == null) return;
+
+      const targetIndex = contentParts.findIndex(
+        (p) =>
+          p?.type === ContentTypes.TOOL_CALL &&
+          (p as t.ToolCallContent).tool_call?.id === toolCallId
+      );
+      if (targetIndex < 0) return;
+
+      const existing = contentParts[targetIndex] as t.ToolCallContent | undefined;
+      const current = existing?.tool_call;
+      if (!current) return;
+
+      const currentOutput =
+        typeof current.output === 'string' ? current.output : '';
+      const newOutput = currentOutput + delta;
+
+      contentParts[targetIndex] = {
+        ...existing,
+        tool_call: { ...current, output: newOutput },
+      };
     } else if (event === GraphEvents.ON_RUN_STEP_COMPLETED) {
       const { result } = data as unknown as { result: t.ToolEndEvent };
 
       const toolCallId = result.tool_call.id;
 
       // Never use runStep.index - it misaligns when think/text are interleaved.
-      // Always find by id or append.
+      // Always find by id or append. Match by id even when partial output exists (streaming).
       let targetIndex: number | undefined;
       if (toolCallId) {
         for (let i = 0; i < contentParts.length; i++) {
@@ -917,8 +1082,6 @@ export function createContentAggregator(): t.ContentAggregatorResult {
               ? (part as t.ToolCallContent).tool_call
               : undefined;
           if (!tc) continue;
-          const hasOutput = tc.output != null && tc.output !== '';
-          if (hasOutput) continue;
           if (tc.id === toolCallId) {
             targetIndex = i;
             break;
@@ -935,6 +1098,18 @@ export function createContentAggregator(): t.ContentAggregatorResult {
       };
 
       updateContent(targetIndex, contentPart, true);
+    } else if ((event as string) === 'agent_return') {
+      const dataPayload = data as { agent_id?: string; source_agent_id?: string };
+      const agentId = dataPayload?.agent_id;
+      const sourceAgentId = dataPayload?.source_agent_id;
+      if (agentId && sourceAgentId) {
+        const appendIdx = contentParts.length;
+        const agentReturnPart: t.MessageContentComplex = {
+          type: ContentTypes.AGENT_RETURN,
+          agent_return: { agentId, sourceAgentId },
+        };
+        updateContent(appendIdx, agentReturnPart);
+      }
     }
   };
 

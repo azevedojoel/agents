@@ -927,6 +927,115 @@ describe('Agent Handoffs Tests', () => {
     });
   });
 
+  describe('Return Control', () => {
+    it('should include return_control and return_to in handoff tool schema', async () => {
+      const agents: t.AgentInputs[] = [
+        createBasicAgent('agent_a', 'You are agent A'),
+        createBasicAgent('agent_b', 'You are agent B'),
+      ];
+
+      const edges: t.GraphEdge[] = [
+        {
+          from: 'agent_a',
+          to: 'agent_b',
+          edgeType: 'handoff',
+          description: 'Transfer to agent B',
+        },
+      ];
+
+      const run = await Run.create(createTestConfig(agents, edges));
+
+      const agentAContext = (run.Graph as StandardGraph).agentContexts.get(
+        'agent_a'
+      );
+      const handoffTool = findToolByName(
+        agentAContext?.graphTools,
+        `${Constants.LC_TRANSFER_TO_}agent_b`
+      );
+
+      expect(handoffTool).toBeDefined();
+      const schema = getToolSchema(handoffTool!) as Record<string, unknown>;
+      expect(schema).toBeDefined();
+      const properties = schema.properties as Record<string, unknown>;
+      expect(properties).toBeDefined();
+      expect(properties.return_control).toBeDefined();
+      expect(properties.return_to).toBeDefined();
+    });
+
+    it('should transfer control back to caller when return_control is true', async () => {
+      const agents: t.AgentInputs[] = [
+        createBasicAgent(
+          'agent_a',
+          'You are agent A. Transfer to agent B when asked.'
+        ),
+        createBasicAgent(
+          'agent_b',
+          'You are agent B. Respond with the requested information.'
+        ),
+      ];
+
+      const edges: t.GraphEdge[] = [
+        {
+          from: 'agent_a',
+          to: 'agent_b',
+          edgeType: 'handoff',
+          description: 'Transfer to agent B',
+        },
+      ];
+
+      const run = await Run.create(createTestConfig(agents, edges));
+
+      run.Graph?.overrideTestModel(
+        [
+          'Transferring to agent B', // Agent A response with tool call
+          'Casey found files: file1.csv, file2.csv', // Agent B response
+          'I received the results. Transferring to Coder.', // Agent A after return
+        ],
+        10,
+        [
+          {
+            id: 'tool_call_1',
+            name: `${Constants.LC_TRANSFER_TO_}agent_b`,
+            args: {
+              instructions: 'Find CSV files',
+              return_control: true,
+            },
+          } as ToolCall,
+        ]
+      );
+
+      const messages = [new HumanMessage('Find CSV files and report back')];
+
+      const config: Partial<RunnableConfig> & {
+        version: 'v1' | 'v2';
+        streamMode: string;
+      } = {
+        configurable: {
+          thread_id: 'test-return-control-thread',
+        },
+        streamMode: 'values',
+        version: 'v2' as const,
+      };
+
+      await run.processStream({ messages }, config);
+
+      const finalMessages = run.getRunMessages();
+      expect(finalMessages).toBeDefined();
+
+      const humanMessages = finalMessages!.filter(
+        (msg) => msg.getType() === 'human'
+      );
+      const returnMessage = humanMessages.find(
+        (msg) =>
+          typeof msg.content === 'string' &&
+          msg.content.includes('--- Returned from') &&
+          msg.content.includes('Casey found files')
+      );
+      expect(returnMessage).toBeDefined();
+      expect(returnMessage?.content).toContain('file1.csv');
+    });
+  });
+
   describe('Handoff Tool Naming', () => {
     it('should use correct naming convention for handoff tools', async () => {
       const agents: t.AgentInputs[] = [

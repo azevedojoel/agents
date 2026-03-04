@@ -119,6 +119,14 @@ export type ToolEndData = {
   input: string | Record<string, unknown>;
   output?: ToolMessage | Command;
 };
+
+/** Delta event for streaming tool output (e.g. generate_code) */
+export type ToolOutputDeltaData = {
+  tool_call_id: string;
+  step_id?: string;
+  delta: string;
+};
+
 export type ToolErrorData = {
   id: string;
   name: string;
@@ -192,6 +200,14 @@ export type AgentUpdate = {
     index: number;
     runId: string;
     agentId: string;
+  };
+};
+
+export type AgentReturn = {
+  type: ContentTypes.AGENT_RETURN;
+  agent_return: {
+    agentId: string;
+    sourceAgentId: string;
   };
 };
 
@@ -329,6 +345,7 @@ export type MessageContentComplex = (
   | ToolResultContent
   | ThinkingContentText
   | AgentUpdate
+  | AgentReturn
   | ToolCallContent
   | ReasoningContentText
   | MessageContentText

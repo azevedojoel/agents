@@ -154,6 +154,11 @@ export class ToolNode<T = any> extends RunnableCallable<T, T> {
           ...invokeParams,
           toolRegistry: this.toolRegistry,
         };
+      } else if (call.name === Constants.RUN_TOOL_AND_SAVE) {
+        invokeParams = {
+          ...invokeParams,
+          toolMap: this.toolMap,
+        };
       }
 
       /**
@@ -192,7 +197,11 @@ export class ToolNode<T = any> extends RunnableCallable<T, T> {
       /** Inject streaming callback for generate_code tool output */
       if (call.name === 'generate_code') {
         const emitToolOutputDelta = config.configurable?.emitToolOutputDelta as
-          | ((toolCallId: string, stepId: string | undefined, delta: string) => void)
+          | ((
+              toolCallId: string,
+              stepId: string | undefined,
+              delta: string
+            ) => void)
           | undefined;
         if (typeof emitToolOutputDelta === 'function') {
           invokeParams._emitToolOutputDelta = emitToolOutputDelta;
@@ -200,13 +209,26 @@ export class ToolNode<T = any> extends RunnableCallable<T, T> {
           invokeParams._stepId = stepId;
           if (process.env.NODE_ENV === 'development') {
             console.debug(
-              `[ToolNode] generate_code streaming injected toolCallId=${call.id ?? '?'} stepId=${stepId ?? '?'}`,
+              `[ToolNode] generate_code streaming injected toolCallId=${call.id ?? '?'} stepId=${stepId ?? '?'}`
             );
           }
         }
       }
 
-      const output = await tool.invoke(invokeParams, config);
+      // Merge invokeParams into config.toolCall so tools (e.g. run_tool_and_save) can access
+      // injected runtime data (toolMap, etc.) - LangChain may strip non-schema fields from input
+      const existingToolCall = (config as Record<string, unknown>).toolCall as
+        | Record<string, unknown>
+        | undefined;
+      const invokeConfig = {
+        ...config,
+        toolCall: {
+          ...(existingToolCall ?? {}),
+          ...invokeParams,
+        },
+      } as RunnableConfig;
+
+      const output = await tool.invoke(invokeParams, invokeConfig);
       if (
         (isBaseMessage(output) && output._getType() === 'tool') ||
         isCommand(output)

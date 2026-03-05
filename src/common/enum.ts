@@ -170,6 +170,7 @@ export enum Constants {
   EXECUTE_CODE = 'execute_code',
   TOOL_SEARCH = 'tool_search',
   PROGRAMMATIC_TOOL_CALLING = 'run_tools_with_code',
+  RUN_TOOL_AND_SAVE = 'run_tool_and_save',
   WEB_SEARCH = 'web_search',
   CONTENT_AND_ARTIFACT = 'content_and_artifact',
   LC_TRANSFER_TO_ = 'lc_transfer_to_',

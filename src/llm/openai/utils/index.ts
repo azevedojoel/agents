@@ -329,7 +329,8 @@ export function _convertMessagesToOpenAIParams(
         });
 
     // Filter out empty text blocks - API rejects "text content blocks must be non-empty"
-    // Filter out Anthropic thinking blocks - OpenAI API only supports: text, image_url, input_audio, refusal, audio, file
+    // Filter out Anthropic thinking blocks and tool_use - OpenAI API only supports: text, image_url, input_audio, refusal, audio, file
+    // tool_use must be filtered when receiving messages from Anthropic (e.g. agent transfer) - OpenAI uses tool_calls field instead
     const content =
       typeof rawContent === 'string'
         ? rawContent
@@ -338,7 +339,9 @@ export function _convertMessagesToOpenAIParams(
             m &&
               typeof m === 'object' &&
               'type' in m &&
-              (m.type === 'thinking' || m.type === 'redacted_thinking')
+              (m.type === 'thinking' ||
+                m.type === 'redacted_thinking' ||
+                m.type === 'tool_use')
           ) {
             return false;
           }

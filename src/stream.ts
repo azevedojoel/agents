@@ -518,7 +518,8 @@ export function createContentAggregator(): t.ContentAggregatorResult {
       if (
         isThinkSlot &&
         (partType === ContentTypes.TEXT ||
-          (typeof partType === 'string' && partType.startsWith(ContentTypes.TEXT)))
+          (typeof partType === 'string' &&
+            partType.startsWith(ContentTypes.TEXT)))
       ) {
         let lastThinkIdx = -1;
         for (let i = contentParts.length - 1; i >= 0; i--) {
@@ -833,44 +834,52 @@ export function createContentAggregator(): t.ContentAggregatorResult {
           ? messageDelta.delta.content[0]
           : messageDelta.delta.content;
 
-        // Find last agent_return - text after it is "in scope"; text before is from a prior turn.
-        let lastAgentReturnIdx = -1;
-        for (let i = contentParts.length - 1; i >= 0; i--) {
-          if (contentParts[i]?.type === ContentTypes.AGENT_RETURN) {
-            lastAgentReturnIdx = i;
-            break;
-          }
-        }
-        // Find last text part AFTER agent_return (or any text if no agent_return yet).
-        let targetIndex = -1;
-        for (let i = contentParts.length - 1; i > lastAgentReturnIdx; i--) {
-          const pType = contentParts[i]?.type;
-          if (
-            pType === ContentTypes.TEXT ||
-            (typeof pType === 'string' && pType.startsWith(ContentTypes.TEXT))
-          ) {
-            targetIndex = i;
-            break;
-          }
-        }
-        if (targetIndex < 0) {
+        // When last part is TOOL_CALL, we're adding text AFTER tools - append new block instead of merging.
+        const lastPart = contentParts[contentParts.length - 1];
+        let targetIndex: number;
+        if (lastPart?.type === ContentTypes.TOOL_CALL) {
           targetIndex = contentParts.length;
           contentParts.push(undefined);
         } else {
-          // AgentId-based split: when agent changes, start a new text block.
-          // Also append when lastAgentId exists but runStep.agentId is undefined (conservative:
-          // don't merge into a known agent's text when current agent is unknown).
-          const lastTextMeta = contentMetaMap.get(targetIndex);
-          const lastAgentId = lastTextMeta?.agentId;
-          const agentChanged =
-            runStep.agentId != null &&
-            lastAgentId != null &&
-            runStep.agentId !== lastAgentId;
-          const unknownAgentMergingIntoKnown =
-            lastAgentId != null && runStep.agentId == null;
-          if (agentChanged || unknownAgentMergingIntoKnown) {
+          // Find last agent_return - text after it is "in scope"; text before is from a prior turn.
+          let lastAgentReturnIdx = -1;
+          for (let i = contentParts.length - 1; i >= 0; i--) {
+            if (contentParts[i]?.type === ContentTypes.AGENT_RETURN) {
+              lastAgentReturnIdx = i;
+              break;
+            }
+          }
+          // Find last text part AFTER agent_return (or any text if no agent_return yet).
+          targetIndex = -1;
+          for (let i = contentParts.length - 1; i > lastAgentReturnIdx; i--) {
+            const pType = contentParts[i]?.type;
+            if (
+              pType === ContentTypes.TEXT ||
+              (typeof pType === 'string' && pType.startsWith(ContentTypes.TEXT))
+            ) {
+              targetIndex = i;
+              break;
+            }
+          }
+          if (targetIndex < 0) {
             targetIndex = contentParts.length;
             contentParts.push(undefined);
+          } else {
+            // AgentId-based split: when agent changes, start a new text block.
+            // Also append when lastAgentId exists but runStep.agentId is undefined (conservative:
+            // don't merge into a known agent's text when current agent is unknown).
+            const lastTextMeta = contentMetaMap.get(targetIndex);
+            const lastAgentId = lastTextMeta?.agentId;
+            const agentChanged =
+              runStep.agentId != null &&
+              lastAgentId != null &&
+              runStep.agentId !== lastAgentId;
+            const unknownAgentMergingIntoKnown =
+              lastAgentId != null && runStep.agentId == null;
+            if (agentChanged || unknownAgentMergingIntoKnown) {
+              targetIndex = contentParts.length;
+              contentParts.push(undefined);
+            }
           }
         }
 
@@ -904,46 +913,54 @@ export function createContentAggregator(): t.ContentAggregatorResult {
           ? reasoningDelta.delta.content[0]
           : reasoningDelta.delta.content;
 
-        // Never use runStep.index for think - it increments per delta and creates many parts.
-        // Find last agent_return - think after it is "in scope"; think before it is from a prior turn.
-        let lastAgentReturnIdx = -1;
-        for (let i = contentParts.length - 1; i >= 0; i--) {
-          if (contentParts[i]?.type === ContentTypes.AGENT_RETURN) {
-            lastAgentReturnIdx = i;
-            break;
-          }
-        }
-        // Find last think part AFTER agent_return (or any think if no agent_return yet).
-        let targetIndex = -1;
-        for (let i = contentParts.length - 1; i > lastAgentReturnIdx; i--) {
-          const p = contentParts[i];
-          const pType = p?.type;
-          if (
-            pType === ContentTypes.THINK ||
-            (typeof pType === 'string' &&
-              (pType.startsWith(ContentTypes.THINK) ||
-                pType.startsWith(ContentTypes.REASONING) ||
-                pType === ContentTypes.REASONING_CONTENT))
-          ) {
-            targetIndex = i;
-            break;
-          }
-        }
-        if (targetIndex < 0) {
+        // When last part is TOOL_CALL, we're adding think AFTER tools - append new block instead of merging.
+        const lastPart = contentParts[contentParts.length - 1];
+        let targetIndex: number;
+        if (lastPart?.type === ContentTypes.TOOL_CALL) {
           targetIndex = contentParts.length;
           contentParts.push(undefined);
         } else {
-          // AgentId-based split: when agent changes (e.g. Ellis -> Casey), start a new think block.
-          // Fallback when agent_return is absent (e.g. transfer without return_control).
-          const lastThinkMeta = contentMetaMap.get(targetIndex);
-          const lastAgentId = lastThinkMeta?.agentId;
-          if (
-            runStep.agentId != null &&
-            lastAgentId != null &&
-            runStep.agentId !== lastAgentId
-          ) {
+          // Never use runStep.index for think - it increments per delta and creates many parts.
+          // Find last agent_return - think after it is "in scope"; think before it is from a prior turn.
+          let lastAgentReturnIdx = -1;
+          for (let i = contentParts.length - 1; i >= 0; i--) {
+            if (contentParts[i]?.type === ContentTypes.AGENT_RETURN) {
+              lastAgentReturnIdx = i;
+              break;
+            }
+          }
+          // Find last think part AFTER agent_return (or any think if no agent_return yet).
+          targetIndex = -1;
+          for (let i = contentParts.length - 1; i > lastAgentReturnIdx; i--) {
+            const p = contentParts[i];
+            const pType = p?.type;
+            if (
+              pType === ContentTypes.THINK ||
+              (typeof pType === 'string' &&
+                (pType.startsWith(ContentTypes.THINK) ||
+                  pType.startsWith(ContentTypes.REASONING) ||
+                  pType === ContentTypes.REASONING_CONTENT))
+            ) {
+              targetIndex = i;
+              break;
+            }
+          }
+          if (targetIndex < 0) {
             targetIndex = contentParts.length;
             contentParts.push(undefined);
+          } else {
+            // AgentId-based split: when agent changes (e.g. Ellis -> Casey), start a new think block.
+            // Fallback when agent_return is absent (e.g. transfer without return_control).
+            const lastThinkMeta = contentMetaMap.get(targetIndex);
+            const lastAgentId = lastThinkMeta?.agentId;
+            if (
+              runStep.agentId != null &&
+              lastAgentId != null &&
+              runStep.agentId !== lastAgentId
+            ) {
+              targetIndex = contentParts.length;
+              contentParts.push(undefined);
+            }
           }
         }
 
@@ -1054,7 +1071,9 @@ export function createContentAggregator(): t.ContentAggregatorResult {
       );
       if (targetIndex < 0) return;
 
-      const existing = contentParts[targetIndex] as t.ToolCallContent | undefined;
+      const existing = contentParts[targetIndex] as
+        | t.ToolCallContent
+        | undefined;
       const current = existing?.tool_call;
       if (!current) return;
 
@@ -1099,9 +1118,12 @@ export function createContentAggregator(): t.ContentAggregatorResult {
 
       updateContent(targetIndex, contentPart, true);
     } else if ((event as string) === 'agent_return') {
-      const dataPayload = data as { agent_id?: string; source_agent_id?: string };
-      const agentId = dataPayload?.agent_id;
-      const sourceAgentId = dataPayload?.source_agent_id;
+      const dataPayload = data as {
+        agent_id?: string;
+        source_agent_id?: string;
+      };
+      const agentId = dataPayload.agent_id;
+      const sourceAgentId = dataPayload.source_agent_id;
       if (agentId && sourceAgentId) {
         const appendIdx = contentParts.length;
         const agentReturnPart: t.MessageContentComplex = {

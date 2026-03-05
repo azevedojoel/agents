@@ -85,6 +85,41 @@ function createToolEndEvent(opts: {
   };
 }
 
+const MSG_STEP_ID = 'step_msg';
+const MSG_STEP_ID_2 = 'step_msg_2';
+
+function createMessageRunStep(stepId: string): t.RunStep {
+  return {
+    id: stepId,
+    index: 0,
+    type: StepTypes.MESSAGE_CREATION,
+    stepDetails: {
+      type: StepTypes.MESSAGE_CREATION,
+      message_creation: { message_id: stepId },
+    },
+  };
+}
+
+function createMessageDeltaEvent(
+  stepId: string,
+  content: { type: string; text: string }
+): t.MessageDeltaEvent {
+  return {
+    id: stepId,
+    delta: { content: [content] },
+  };
+}
+
+function createReasoningDeltaEvent(
+  stepId: string,
+  content: { type: string; think: string }
+): t.ReasoningDeltaEvent {
+  return {
+    id: stepId,
+    delta: { content: [content] },
+  };
+}
+
 describe('ContentAggregator tool_call handling', () => {
   beforeEach(() => {
     jest.spyOn(console, 'debug').mockImplementation(() => {});
@@ -317,5 +352,95 @@ describe('ContentAggregator tool_call handling', () => {
         ? JSON.parse(part1.tool_call.args)
         : part1.tool_call?.args
     ).toEqual({ b: 2 });
+  });
+
+  it('think → text → tool calls → text: preserves order, appends text after tools', () => {
+    const TOOL_2_ID = 'call_002';
+    const { contentParts, aggregateContent } = createContentAggregator();
+
+    // 1. Message step for think + text (before tools)
+    aggregateContent({
+      event: GraphEvents.ON_RUN_STEP,
+      data: createMessageRunStep(MSG_STEP_ID),
+    });
+
+    // 2. Reasoning delta (think)
+    aggregateContent({
+      event: GraphEvents.ON_REASONING_DELTA,
+      data: createReasoningDeltaEvent(MSG_STEP_ID, {
+        type: ContentTypes.THINK,
+        think: 'Let me use a tool.',
+      }),
+    });
+
+    // 3. Message delta (text before tools)
+    aggregateContent({
+      event: GraphEvents.ON_MESSAGE_DELTA,
+      data: createMessageDeltaEvent(MSG_STEP_ID, {
+        type: ContentTypes.TEXT,
+        text: 'hey blah bla',
+      }),
+    });
+
+    // 4. Tool calls
+    aggregateContent({
+      event: GraphEvents.ON_RUN_STEP,
+      data: createRunStep({
+        id: STEP_ID,
+        toolCalls: [
+          { id: TOOL_CALL_ID, name: 'tool_a', args: {} },
+          { id: TOOL_2_ID, name: 'tool_b', args: {} },
+        ],
+      }),
+    });
+
+    aggregateContent({
+      event: GraphEvents.ON_RUN_STEP_COMPLETED,
+      data: createToolEndEvent({
+        toolCallId: TOOL_CALL_ID,
+        name: 'tool_a',
+        args: {},
+        output: 'ok',
+      }),
+    });
+
+    aggregateContent({
+      event: GraphEvents.ON_RUN_STEP_COMPLETED,
+      data: createToolEndEvent({
+        toolCallId: TOOL_2_ID,
+        name: 'tool_b',
+        args: {},
+        output: 'ok',
+      }),
+    });
+
+    // 5. Message step for text after tools
+    aggregateContent({
+      event: GraphEvents.ON_RUN_STEP,
+      data: createMessageRunStep(MSG_STEP_ID_2),
+    });
+
+    // 6. Message delta (text after tools) - must append, not merge into "hey blah bla"
+    aggregateContent({
+      event: GraphEvents.ON_MESSAGE_DELTA,
+      data: createMessageDeltaEvent(MSG_STEP_ID_2, {
+        type: ContentTypes.TEXT,
+        text: ' that was some cool stuff',
+      }),
+    });
+
+    expect(contentParts.length).toBe(5);
+    expect(contentParts[0]?.type).toBe(ContentTypes.THINK);
+    expect((contentParts[0] as t.ReasoningDeltaUpdate).think).toBe(
+      'Let me use a tool.'
+    );
+    expect(contentParts[1]?.type).toBe(ContentTypes.TEXT);
+    expect((contentParts[1] as t.MessageDeltaUpdate).text).toBe('hey blah bla');
+    expect(contentParts[2]?.type).toBe(ContentTypes.TOOL_CALL);
+    expect(contentParts[3]?.type).toBe(ContentTypes.TOOL_CALL);
+    expect(contentParts[4]?.type).toBe(ContentTypes.TEXT);
+    expect((contentParts[4] as t.MessageDeltaUpdate).text).toBe(
+      ' that was some cool stuff'
+    );
   });
 });

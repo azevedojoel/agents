@@ -47,7 +47,7 @@ const FIELDS_DESCRIPTION =
 const MAX_RESULTS_DESCRIPTION = 'Maximum number of matching tools to return';
 const DEFAULT_MAX_RESULTS = 5;
 const MCP_SERVER_DESCRIPTION =
-  'Filter to tools from specific MCP server(s). Can be a single server name or array of names. If provided without a query, lists all tools from those servers.';
+  'Filter to tools from specific MCP server(s). Use config keys from librechat.yaml (e.g. "Google", "Microsoft"). Can be a single server name or array of names. If provided without a query, lists all tools from those servers.';
 
 export const ToolSearchToolSchema = {
   type: 'object',

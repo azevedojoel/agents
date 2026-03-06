@@ -598,7 +598,7 @@ export function convertResponseContentToChatGenerationChunk(
         }
         return p;
       })
-      .filter((p) => p !== undefined);
+      .filter((p): p is NonNullable<typeof p> => p !== undefined);
   } else {
     // no content returned - likely due to abnormal stop reason, e.g. malformed function call
     content = [];
@@ -661,7 +661,7 @@ export function convertResponseContentToChatGenerationChunk(
   return new ChatGenerationChunk({
     text,
     message: new AIMessageChunk({
-      content: content,
+      content: content ?? [],
       name: !candidateContent ? undefined : candidateContent.role,
       tool_call_chunks: toolCallChunks,
       // Each chunk can have unique "generationInfo", and merging strategy is unclear,
@@ -756,7 +756,7 @@ export function mapGenerateContentResultToChatResult(
         }
         return p;
       })
-      .filter((p) => p !== undefined);
+      .filter((p): p is NonNullable<typeof p> => p !== undefined);
   } else {
     content = [];
   }

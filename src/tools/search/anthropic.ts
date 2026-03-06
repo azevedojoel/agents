@@ -19,7 +19,7 @@ export function coerceAnthropicSearchResults({
   turn?: number;
 }): SearchResultData {
   const organic: ProcessedOrganic[] = results
-    .filter((result) => result.type === 'web_search_result')
+    .filter(isAnthropicWebSearchResult)
     .map((result, index) => ({
       link: result.url,
       position: index + 1,

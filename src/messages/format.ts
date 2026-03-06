@@ -377,7 +377,8 @@ function formatAssistantMessage(
         continue;
       } else if (
         part.type === ContentTypes.ERROR ||
-        part.type === ContentTypes.AGENT_UPDATE
+        part.type === ContentTypes.AGENT_UPDATE ||
+        part.type === ContentTypes.AGENT_RETURN
       ) {
         continue;
       } else {
@@ -681,7 +682,7 @@ function ensureUniqueToolCallIds(
   const remapMap = new Map<string, string>();
 
   for (const part of content) {
-    if (part?.type !== ContentTypes.TOOL_CALL || !part.tool_call) continue;
+    if (part.type !== ContentTypes.TOOL_CALL || !part.tool_call) continue;
 
     const tc = part.tool_call as ToolCallPart;
     const currentId = tc.id ?? '';
@@ -701,7 +702,7 @@ function ensureUniqueToolCallIds(
 
   const seenInToolCallIds = new Map<string, number>();
   for (const part of content) {
-    if (part?.type !== ContentTypes.TEXT || !Array.isArray(part.tool_call_ids))
+    if (part.type !== ContentTypes.TEXT || !Array.isArray(part.tool_call_ids))
       continue;
 
     const ids = part.tool_call_ids as string[];
@@ -878,14 +879,12 @@ export const formatAgentMessages = (
           if (lastTextPartIndex >= 0) {
             const lastTextPart = filteredContent[lastTextPartIndex] as {
               type: string;
-              [ContentTypes.TEXT]?: string;
               text?: string;
             };
-            const existingText =
-              lastTextPart[ContentTypes.TEXT] ?? lastTextPart.text ?? '';
+            const existingText = lastTextPart.text ?? '';
             filteredContent[lastTextPartIndex] = {
               ...lastTextPart,
-              [ContentTypes.TEXT]: existingText
+              text: existingText
                 ? `${existingText}\n${invalidToolText}`
                 : invalidToolText,
             };
@@ -893,7 +892,7 @@ export const formatAgentMessages = (
             /** No text part exists, create one */
             filteredContent.push({
               type: ContentTypes.TEXT,
-              [ContentTypes.TEXT]: invalidToolText,
+              text: invalidToolText,
             });
           }
         }
@@ -908,7 +907,9 @@ export const formatAgentMessages = (
       }
     }
 
-    ensureUniqueToolCallIds(processedMessage.content as MessageContentComplex[]);
+    ensureUniqueToolCallIds(
+      processedMessage.content as MessageContentComplex[]
+    );
 
     // Process the assistant message using the helper function
     const formattedMessages = formatAssistantMessage(processedMessage);

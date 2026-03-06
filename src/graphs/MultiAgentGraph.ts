@@ -284,8 +284,12 @@ export class MultiAgentGraph extends StandardGraph {
   private buildHandoffToolSchema(
     hasHandoffInput: boolean,
     promptKey: string,
-    handoffInputDescription: string,
-  ): { type: 'object'; properties: Record<string, unknown>; required: string[] } {
+    handoffInputDescription: string
+  ): {
+    type: 'object';
+    properties: Record<string, unknown>;
+    required: string[];
+  } {
     const properties: Record<string, unknown> = {
       ...MultiAgentGraph.HANDOFF_RETURN_SCHEMA,
     };
@@ -391,7 +395,7 @@ export class MultiAgentGraph extends StandardGraph {
             schema: this.buildHandoffToolSchema(
               hasHandoffInput,
               promptKey,
-              handoffInputDescription as string,
+              handoffInputDescription as string
             ),
             description: toolDescription,
           }
@@ -527,7 +531,7 @@ export class MultiAgentGraph extends StandardGraph {
               schema: this.buildHandoffToolSchema(
                 hasHandoffInput,
                 promptKey,
-                handoffInputDescription as string,
+                handoffInputDescription as string
               ),
               description: toolDescription,
             }
@@ -652,8 +656,7 @@ export class MultiAgentGraph extends StandardGraph {
       typeof rawReturnTo === 'string' && rawReturnTo.trim()
         ? rawReturnTo.trim()
         : null;
-    const returnTo =
-      explicitReturnTo ?? (returnControl ? sourceAgentId : null);
+    const returnTo = explicitReturnTo ?? (returnControl ? sourceAgentId : null);
 
     /** Get the tool_call_id to find and filter the AI message's tool call */
     const toolCallId = toolMessage.tool_call_id;
@@ -843,7 +846,16 @@ export class MultiAgentGraph extends StandardGraph {
             sourceAgentName != null &&
             sourceAgentName !== ''
           ) {
-            agentContext.setHandoffContext(sourceAgentName, parallelSiblings);
+            const returnToAgentName =
+              returnTo != null
+                ? (this.agentContexts.get(returnTo)?.name ?? returnTo)
+                : undefined;
+            agentContext.setHandoffContext(
+              sourceAgentName,
+              parallelSiblings,
+              returnControl,
+              returnToAgentName
+            );
           }
 
           /** Build messages for the receiving agent */
@@ -977,7 +989,7 @@ export class MultiAgentGraph extends StandardGraph {
           handoffContext != null &&
           handoffContext.returnControl === true &&
           handoffContext.returnTo != null &&
-          (handoffContext.parallelSiblings?.length ?? 0) === 0 &&
+          (handoffContext.parallelSiblings.length ?? 0) === 0 &&
           this.agentContexts.has(handoffContext.returnTo)
         ) {
           const lastMessage = result.messages[
@@ -993,14 +1005,16 @@ export class MultiAgentGraph extends StandardGraph {
             const output = getBufferString(
               result.messages.slice(this.startIndex)
             );
-            const agentName =
-              this.agentContexts.get(agentId)?.name ?? agentId;
+            const agentName = this.agentContexts.get(agentId)?.name ?? agentId;
             const returnMessage = new HumanMessage(
               `--- Returned from ${agentName} ---\n\n${output}`
             );
             await safeDispatchCustomEvent(
               GraphEvents.ON_HANDOFF,
-              { destinationAgentId: handoffContext.returnTo, sourceAgentId: agentId },
+              {
+                destinationAgentId: handoffContext.returnTo,
+                sourceAgentId: agentId,
+              },
               config
             );
             return new Command({

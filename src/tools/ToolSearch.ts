@@ -536,6 +536,59 @@ function performLocalSearch(
   };
 }
 
+/** Default max results for searchToolsByQuery */
+const SEARCH_TOOLS_DEFAULT_MAX_RESULTS = 10;
+
+/** Default fields to search */
+const SEARCH_TOOLS_DEFAULT_FIELDS = ['name', 'description'] as const;
+
+/**
+ * Searches tools by query using BM25 ranking.
+ * Exported for use by sys_admin_search and other discovery tools.
+ *
+ * @param tools - Array of tool metadata to search
+ * @param query - Search query (empty returns all tools up to maxResults)
+ * @param options - Optional maxResults (default 10) and fields (default name, description)
+ * @returns ToolSearchResponse with tool_references, total_tools_searched, pattern_used
+ */
+export function searchToolsByQuery(
+  tools: t.ToolMetadata[],
+  query: string,
+  options?: { maxResults?: number; fields?: string[] }
+): t.ToolSearchResponse {
+  const maxResults = options?.maxResults ?? SEARCH_TOOLS_DEFAULT_MAX_RESULTS;
+  const fields = options?.fields ?? [...SEARCH_TOOLS_DEFAULT_FIELDS];
+  return performLocalSearch(tools, query, fields, maxResults);
+}
+
+/**
+ * Formats a ToolSearchResponse as JSON for discovery tools.
+ * Output format: { found, tools: [{ name, score, matched_in, snippet }], total_searched, query }
+ * Compatible with parseToolSearchJson (tools[].name).
+ *
+ * @param response - Search response from searchToolsByQuery or performLocalSearch
+ * @param useFullNames - If true, use full tool names (e.g. sys_admin_ban_user). Default true.
+ * @returns JSON string
+ */
+export function formatToolSearchForDiscovery(
+  response: t.ToolSearchResponse,
+  useFullNames = true
+): string {
+  const { tool_references, total_tools_searched, pattern_used } = response;
+  const output = {
+    found: tool_references.length,
+    tools: tool_references.map((ref) => ({
+      name: useFullNames ? ref.tool_name : getBaseToolName(ref.tool_name),
+      score: Number(ref.match_score.toFixed(2)),
+      matched_in: ref.matched_field,
+      snippet: ref.snippet,
+    })),
+    total_searched: total_tools_searched,
+    query: pattern_used,
+  };
+  return JSON.stringify(output, null, 2);
+}
+
 /**
  * Generates the JavaScript search script to be executed in the sandbox.
  * Uses plain JavaScript for maximum compatibility with the Code API.

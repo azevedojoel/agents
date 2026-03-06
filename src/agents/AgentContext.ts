@@ -176,6 +176,10 @@ export class AgentContext {
     sourceAgentName: string;
     /** Names of sibling agents executing in parallel (empty if sequential) */
     parallelSiblings: string[];
+    /** When true, control will automatically return to the caller after task completion */
+    returnControl?: boolean;
+    /** Display name of agent who receives control back (when returnControl is true) */
+    returnToAgentName?: string;
   };
 
   constructor({
@@ -380,14 +384,35 @@ export class AgentContext {
     if (!this.handoffContext) return '';
 
     const displayName = this.name ?? this.agentId;
-    const { sourceAgentName, parallelSiblings } = this.handoffContext;
+    const {
+      sourceAgentName,
+      parallelSiblings,
+      returnControl,
+      returnToAgentName,
+    } = this.handoffContext;
     const isParallel = parallelSiblings.length > 0;
 
     const lines: string[] = [];
     lines.push('## Multi-Agent Workflow');
     lines.push(
-      `You are "${displayName}", transferred from "${sourceAgentName}".`
+      `This entire conversation thread was transferred to you ("${displayName}") from "${sourceAgentName}".`
     );
+    lines.push(
+      `Only "${sourceAgentName}" initiated this transfer—no other agent. When the user or context mentions "${sourceAgentName}" by name, they mean the agent who transferred to you, not you.`
+    );
+
+    if (returnControl === true) {
+      const returnTarget =
+        returnToAgentName != null && returnToAgentName !== ''
+          ? returnToAgentName
+          : sourceAgentName;
+      lines.push(
+        `When you complete your task, the conversation will automatically return to "${returnTarget}".`
+      );
+      lines.push(
+        `"${returnTarget}" will receive the full transcript of this conversation and does not need any explanations or summaries from you unless they explicitly asked for something in the transfer instructions.`
+      );
+    }
 
     if (isParallel) {
       lines.push(`Running in parallel with: ${parallelSiblings.join(', ')}.`);
@@ -595,9 +620,21 @@ export class AgentContext {
    * Marks system runnable as stale to include handoff context in system message.
    * @param sourceAgentName - Name of the agent that transferred control
    * @param parallelSiblings - Names of other agents executing in parallel with this one
+   * @param returnControl - When true, control will automatically return after task completion
+   * @param returnToAgentName - Display name of agent who receives control back (when returnControl is true)
    */
-  setHandoffContext(sourceAgentName: string, parallelSiblings: string[]): void {
-    this.handoffContext = { sourceAgentName, parallelSiblings };
+  setHandoffContext(
+    sourceAgentName: string,
+    parallelSiblings: string[],
+    returnControl?: boolean,
+    returnToAgentName?: string
+  ): void {
+    this.handoffContext = {
+      sourceAgentName,
+      parallelSiblings,
+      returnControl,
+      returnToAgentName,
+    };
     this.systemRunnableStale = true;
   }
 

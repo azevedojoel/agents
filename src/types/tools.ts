@@ -191,6 +191,8 @@ export type ToolExecuteResult = {
   status: 'success' | 'error';
   /** Error message if status is 'error' */
   errorMessage?: string;
+  /** When true, error was due to user denying approval (errorMessage is user's reason) */
+  isUserDenial?: boolean;
 };
 
 /** Map of tool names to tool definitions */

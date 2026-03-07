@@ -448,7 +448,15 @@ export class ToolNode<T = any> extends RunnableCallable<T, T> {
       let contentString: string;
 
       if (result.status === 'error') {
-        contentString = `Error: ${result.errorMessage ?? 'Unknown error'}\n Please fix your mistakes.`;
+        const errMsg = result.errorMessage ?? 'Unknown error';
+        if (result.isUserDenial) {
+          contentString =
+            errMsg && errMsg !== 'User denied execution.'
+              ? `The tool was denied by the user. User's reason: ${errMsg}`
+              : 'The tool was denied by the user.';
+        } else {
+          contentString = `Error: ${errMsg}\n Please fix your mistakes.`;
+        }
         toolMessage = new ToolMessage({
           status: 'error',
           content: contentString,

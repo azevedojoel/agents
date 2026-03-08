@@ -3,7 +3,6 @@
  * Unit tests for Tool Search.
  * Tests helper functions and sanitization logic without hitting the API.
  */
-import { describe, it, expect } from '@jest/globals';
 import {
   sanitizeRegex,
   escapeRegexSpecialChars,
@@ -450,6 +449,92 @@ describe('ToolSearch', () => {
 
       expect(result.tool_references[0].snippet).toBeTruthy();
       expect(result.tool_references[0].snippet.length).toBeGreaterThan(0);
+    });
+
+    it('finds tools with singular/plural token expansion (question/questions)', () => {
+      const toolsWithQuestions: ToolMetadata[] = [
+        {
+          name: 'human_ask_questions',
+          description: 'Ask questions to a human',
+          parameters: undefined,
+        },
+        {
+          name: 'sys_admin_help',
+          description: 'Returns all sys_admin tools and example questions',
+          parameters: undefined,
+        },
+      ];
+      const result = performLocalSearch(
+        toolsWithQuestions,
+        'question',
+        ['name', 'description'],
+        10
+      );
+      expect(result.tool_references.length).toBeGreaterThan(0);
+      expect(result.tool_references.map((r) => r.tool_name)).toContain(
+        'human_ask_questions'
+      );
+    });
+
+    it('finds tools with singular/plural token expansion (log/logs)', () => {
+      const toolsWithLogs: ToolMetadata[] = [
+        {
+          name: 'sys_admin_tail_logs',
+          description: 'Read recent server log entries',
+          parameters: undefined,
+        },
+        {
+          name: 'sys_admin_search_event_logs',
+          description: 'Search audit event logs',
+          parameters: undefined,
+        },
+      ];
+      const result = performLocalSearch(
+        toolsWithLogs,
+        'log',
+        ['name', 'description'],
+        10
+      );
+      expect(result.tool_references.length).toBe(2);
+      expect(result.tool_references.map((r) => r.tool_name)).toContain(
+        'sys_admin_tail_logs'
+      );
+      expect(result.tool_references.map((r) => r.tool_name)).toContain(
+        'sys_admin_search_event_logs'
+      );
+    });
+
+    it('boosts score when query is substring of tool name', () => {
+      const tools: ToolMetadata[] = [
+        {
+          name: 'human_ask_questions',
+          description: 'Ask questions to a human',
+          parameters: undefined,
+        },
+      ];
+      const result = performLocalSearch(
+        tools,
+        'human_ask_question',
+        ['name', 'description'],
+        10
+      );
+      expect(result.tool_references.length).toBe(1);
+      expect(result.tool_references[0].tool_name).toBe('human_ask_questions');
+      expect(result.tool_references[0].match_score).toBeGreaterThanOrEqual(0.9);
+    });
+
+    it('uses substring fallback when BM25 returns no matches', () => {
+      const tools: ToolMetadata[] = [
+        {
+          name: 'obscure_xyz_tool',
+          description: 'A tool for xyz operations',
+          parameters: undefined,
+        },
+      ];
+      const result = performLocalSearch(tools, 'xy', ['name'], 10);
+      expect(result.tool_references.length).toBe(1);
+      expect(result.tool_references[0].tool_name).toBe('obscure_xyz_tool');
+      expect(result.tool_references[0].match_score).toBeGreaterThanOrEqual(0.6);
     });
   });
 

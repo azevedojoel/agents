@@ -375,7 +375,27 @@ function tokenize(text: string): string[] {
 }
 
 /**
+ * Expands query tokens with singular/plural variations for better matching.
+ * E.g. "question" -> ["question", "questions"], "logs" -> ["logs", "log"]
+ * @param tokens - Original tokenized query
+ * @returns Deduplicated array including singular/plural variants
+ */
+function expandQueryTokens(tokens: string[]): string[] {
+  const expanded = new Set<string>(tokens);
+  for (const token of tokens) {
+    if (token.length <= 1) continue;
+    if (token.endsWith('s') && !token.endsWith('ss')) {
+      expanded.add(token.slice(0, -1));
+    } else {
+      expanded.add(token + 's');
+    }
+  }
+  return Array.from(expanded);
+}
+
+/**
  * Creates a searchable document string from tool metadata.
+ * Includes both space-separated and raw underscore names for better matching.
  * @param tool - The tool metadata
  * @param fields - Which fields to include
  * @returns Combined document string for BM25
@@ -385,7 +405,7 @@ function createToolDocument(tool: t.ToolMetadata, fields: string[]): string {
 
   if (fields.includes('name')) {
     const baseName = tool.name.replace(/_/g, ' ');
-    parts.push(baseName, baseName);
+    parts.push(baseName, baseName, tool.name);
   }
 
   if (fields.includes('description') && tool.description) {
@@ -450,6 +470,51 @@ function findMatchedField(
 }
 
 /**
+ * Fallback when BM25 returns no matches: find tools where any query token
+ * is a substring of the tool name or description.
+ * @param tools - Array of tool metadata to search
+ * @param tokens - Expanded query tokens
+ * @param fields - Which fields to search
+ * @param maxResults - Maximum results to return
+ * @returns Tool search results with score 0.6 for substring matches
+ */
+function performSubstringFallback(
+  tools: t.ToolMetadata[],
+  tokens: string[],
+  fields: string[],
+  maxResults: number
+): t.ToolSearchResult[] {
+  const results: t.ToolSearchResult[] = [];
+  for (const tool of tools) {
+    const nameLower = tool.name.toLowerCase();
+    const descLower = (tool.description ?? '').toLowerCase();
+    const paramLower = tool.parameters?.properties
+      ? Object.keys(tool.parameters.properties).join(' ').toLowerCase()
+      : '';
+
+    for (const token of tokens) {
+      if (token.length < 2) continue;
+      const matched =
+        (fields.includes('name') && nameLower.includes(token)) ||
+        (fields.includes('description') && descLower.includes(token)) ||
+        (fields.includes('parameters') && paramLower.includes(token));
+
+      if (matched) {
+        const { field, snippet } = findMatchedField(tool, tokens, fields);
+        results.push({
+          tool_name: tool.name,
+          match_score: 0.6,
+          matched_field: field,
+          snippet,
+        });
+        break;
+      }
+    }
+  }
+  return results.slice(0, maxResults);
+}
+
+/**
  * Performs BM25-based search for better relevance ranking.
  * Uses Okapi BM25 algorithm for term frequency and document length normalization.
  * If query is empty, returns all tools (up to maxResults) sorted alphabetically.
@@ -474,6 +539,7 @@ function performLocalSearch(
   }
 
   const queryTokens = tokenize(query);
+  const expandedTokens = expandQueryTokens(queryTokens);
 
   if (queryTokens.length === 0) {
     const allTools = tools
@@ -495,26 +561,33 @@ function performLocalSearch(
   }
 
   const documents = tools.map((tool) => createToolDocument(tool, fields));
-  const scores = BM25(documents, queryTokens, { k1: 1.5, b: 0.75 }) as number[];
+  const scores = BM25(documents, expandedTokens, {
+    k1: 1.5,
+    b: 0.75,
+  }) as number[];
 
   const maxScore = Math.max(...scores.filter((s) => s > 0), 1);
   const queryLower = query.toLowerCase().trim();
+  const queryNormalized = queryLower.replace(/\s+/g, '_');
 
   const results: t.ToolSearchResult[] = [];
   for (let i = 0; i < tools.length; i++) {
     if (scores[i] > 0) {
       const { field, snippet } = findMatchedField(
         tools[i],
-        queryTokens,
+        expandedTokens,
         fields
       );
       let normalizedScore = Math.min(scores[i] / maxScore, 1.0);
 
       const baseName = getBaseToolName(tools[i].name).toLowerCase();
-      if (baseName === queryLower) {
+      const queryForCompare = queryNormalized || queryLower;
+      if (baseName === queryForCompare) {
         normalizedScore = 1.0;
-      } else if (baseName.startsWith(queryLower)) {
+      } else if (baseName.startsWith(queryForCompare)) {
         normalizedScore = Math.max(normalizedScore, 0.95);
+      } else if (queryNormalized && baseName.includes(queryNormalized)) {
+        normalizedScore = Math.max(normalizedScore, 0.9);
       }
 
       results.push({
@@ -524,6 +597,20 @@ function performLocalSearch(
         snippet,
       });
     }
+  }
+
+  if (results.length === 0) {
+    const fallbackResults = performSubstringFallback(
+      tools,
+      expandedTokens,
+      fields,
+      maxResults
+    );
+    return {
+      tool_references: fallbackResults,
+      total_tools_searched: tools.length,
+      pattern_used: query,
+    };
   }
 
   results.sort((a, b) => b.match_score - a.match_score);

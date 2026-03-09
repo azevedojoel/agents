@@ -17,6 +17,7 @@ import type {
   AnthropicMessageStartEvent,
   AnthropicMessageDeltaEvent,
   AnthropicOutputConfig,
+  AnthropicToolChoice,
 } from '@/llm/anthropic/types';
 import { _makeMessageChunkFromAnthropicEvent } from './utils/message_outputs';
 import { _convertMessagesToAnthropicPayload } from './utils/message_inputs';
@@ -187,7 +188,12 @@ export class CustomAnthropic extends ChatAnthropicMessages {
       | Anthropic.Messages.ToolChoiceAuto
       | Anthropic.Messages.ToolChoiceAny
       | Anthropic.Messages.ToolChoiceTool
-      | undefined = handleToolChoice(options?.tool_choice);
+      | undefined = handleToolChoice(
+      (options?.tool_choice ??
+        (this as Record<string, unknown>).tool_choice) as
+        | AnthropicToolChoice
+        | undefined
+      );
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const callOptions = options as Record<string, any> | undefined;

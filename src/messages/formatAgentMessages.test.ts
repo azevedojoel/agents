@@ -217,7 +217,7 @@ describe('formatAgentMessages', () => {
 
   it('should deduplicate duplicate tool_call IDs and produce unique IDs in output', () => {
     const duplicateId = 'toolu_01QMSbm1ZHtufjaxdtiuvVRF';
-    const tools = new Set(['workspace_list_files']);
+    const tools = new Set(['sandbox_list_files']);
     const payload: TPayload = [
       { role: 'user', content: 'List files in / and /src' },
       {
@@ -232,7 +232,7 @@ describe('formatAgentMessages', () => {
             type: ContentTypes.TOOL_CALL,
             tool_call: {
               id: duplicateId,
-              name: 'workspace_list_files',
+              name: 'sandbox_list_files',
               args: '{"path":"/"}',
               output: '[]',
             },
@@ -241,7 +241,7 @@ describe('formatAgentMessages', () => {
             type: ContentTypes.TOOL_CALL,
             tool_call: {
               id: duplicateId,
-              name: 'workspace_list_files',
+              name: 'sandbox_list_files',
               args: '{"path":"/src"}',
               output: '[]',
             },

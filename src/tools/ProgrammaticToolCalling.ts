@@ -83,14 +83,6 @@ export const ProgrammaticToolCallingSchema = {
       minLength: 1,
       description: CODE_PARAM_DESCRIPTION,
     },
-    timeout: {
-      type: 'integer',
-      minimum: 1000,
-      maximum: 300000,
-      default: DEFAULT_TIMEOUT,
-      description:
-        'Maximum execution time in milliseconds. Default: 60 seconds. Max: 5 minutes.',
-    },
   },
   required: ['code'],
 } as const;
@@ -630,12 +622,16 @@ export function createProgrammaticToolCallingTool(
   const maxRoundTrips = initParams.maxRoundTrips ?? DEFAULT_MAX_ROUND_TRIPS;
   const proxy = initParams.proxy ?? process.env.PROXY;
   const debug = initParams.debug ?? process.env.PTC_DEBUG === 'true';
+  const timeoutMs =
+    initParams.timeoutSeconds != null
+      ? initParams.timeoutSeconds * 1000
+      : DEFAULT_TIMEOUT;
   const EXEC_ENDPOINT = `${baseUrl}/exec/programmatic`;
 
   return tool(
     async (rawParams, config) => {
-      const params = rawParams as { code: string; timeout?: number };
-      const { code, timeout = DEFAULT_TIMEOUT } = params;
+      const params = rawParams as { code: string };
+      const { code } = params;
 
       // Extra params injected by ToolNode (follows web_search pattern)
       const { toolMap, toolDefs, session_id, _injected_files } =
@@ -695,7 +691,7 @@ export function createProgrammaticToolCallingTool(
             code,
             tools: effectiveTools,
             session_id,
-            timeout,
+            timeout: timeoutMs,
             ...(files && files.length > 0 ? { files } : {}),
           },
           proxy

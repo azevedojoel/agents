@@ -76,7 +76,7 @@ Runs code and returns stdout/stderr output from a stateless execution environmen
 
 Usage:
 - No network access available.
-- To deliver files to the user, use workspace_send_file_to_user after saving them.
+- To deliver files to the user, use sandbox_send_file_to_user after saving them.
 - NEVER use this tool to execute malicious code.
 `.trim();
 

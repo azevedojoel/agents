@@ -20,6 +20,7 @@ import {
 import {
   ToolMessage,
   SystemMessage,
+  HumanMessage,
   AIMessageChunk,
 } from '@langchain/core/messages';
 import type {
@@ -56,6 +57,10 @@ import {
   joinKeys,
   sleep,
   getParallelToolCallDisableOptions,
+  getRequiredToolChoice,
+  getPendingSubAgentState,
+  getClientOptionsForForcedToolChoice,
+  PENDING_SUBAGENT_TOOLS,
 } from '@/utils';
 import { getChatModelClass, manualToolStreamProviders } from '@/llm/providers';
 import { ToolNode as CustomToolNode, toolsCondition } from '@/tools/ToolNode';
@@ -84,10 +89,12 @@ export abstract class Graph<
     currentModel,
     tools,
     clientOptions,
+    toolChoice,
   }: {
     currentModel?: t.ChatModel;
     tools?: t.GraphTools;
     clientOptions?: t.ClientOptions;
+    toolChoice?: string | Record<string, unknown>;
   }): Runnable;
   abstract getRunMessages(): BaseMessage[] | undefined;
   abstract getContentParts(): t.MessageContentComplex[] | undefined;
@@ -528,10 +535,12 @@ export class StandardGraph extends Graph<t.BaseGraphState, t.GraphNode> {
     provider,
     tools,
     clientOptions,
+    toolChoice,
   }: {
     provider: Providers;
     tools?: t.GraphTools;
     clientOptions?: t.ClientOptions;
+    toolChoice?: string | Record<string, unknown>;
   }): Runnable {
     const ChatModelClass = getChatModelClass(provider);
     const model = new ChatModelClass(clientOptions ?? {});
@@ -570,7 +579,13 @@ export class StandardGraph extends Graph<t.BaseGraphState, t.GraphNode> {
       return model as unknown as Runnable;
     }
 
-    const bindOptions = getParallelToolCallDisableOptions(provider);
+    const bindOptions =
+      toolChoice != null
+        ? {
+          ...getParallelToolCallDisableOptions(provider),
+          tool_choice: toolChoice,
+        }
+        : getParallelToolCallDisableOptions(provider);
     return (model as t.ModelWithTools).bindTools(tools, bindOptions);
   }
 
@@ -697,13 +712,39 @@ export class StandardGraph extends Graph<t.BaseGraphState, t.GraphNode> {
         agentContext.markToolsAsDiscovered(discoveredNames);
       }
 
-      const toolsForBinding = agentContext.getToolsForBinding();
+      const pendingState = getPendingSubAgentState(messages);
+      let toolsForBinding = agentContext.getToolsForBinding();
+      let toolChoiceOverride: string | Record<string, unknown> | undefined;
+
+      if (
+        pendingState.pending &&
+        toolsForBinding &&
+        toolsForBinding.length > 0
+      ) {
+        const allowedSet = new Set<string>(PENDING_SUBAGENT_TOOLS);
+        toolsForBinding = toolsForBinding.filter((t) => {
+          const name =
+            typeof t === 'object' && t != null && 'name' in t
+              ? (t as { name: string }).name
+              : undefined;
+          return name && allowedSet.has(name);
+        });
+        toolChoiceOverride = getRequiredToolChoice(agentContext.provider);
+      }
+
+      const effectiveClientOptions =
+        getClientOptionsForForcedToolChoice(
+          agentContext.provider,
+          agentContext.clientOptions,
+          toolChoiceOverride != null
+        ) ?? agentContext.clientOptions;
       let model =
         this.overrideModel ??
         this.initializeModel({
           tools: toolsForBinding,
           provider: agentContext.provider,
-          clientOptions: agentContext.clientOptions,
+          clientOptions: effectiveClientOptions,
+          toolChoice: toolChoiceOverride,
         });
 
       if (agentContext.systemRunnable) {
@@ -762,6 +803,18 @@ export class StandardGraph extends Graph<t.BaseGraphState, t.GraphNode> {
         finalMessages = formatContentStrings(finalMessages);
       }
 
+      if (pendingState.pending && pendingState.planIds.length > 0) {
+        const planIdsList = pendingState.planIds.join(', ');
+        const pendingInstruction = new HumanMessage({
+          content: `[System reminder] You have delegated work to sub-agents. Pending plan(s): ${planIdsList}.
+You must now either:
+1. Wait for results (await_subagent_results) - pass planId for the plan you want to await
+2. Start new work (run_sub_agent)
+You cannot continue until you await. When multiple plans exist, specify which planId to await.`,
+        });
+        finalMessages = [...finalMessages, pendingInstruction];
+      }
+
       const lastMessageX =
         finalMessages.length >= 2
           ? finalMessages[finalMessages.length - 2]
@@ -816,14 +869,16 @@ export class StandardGraph extends Graph<t.BaseGraphState, t.GraphNode> {
        * Handle edge case: when switching from a non-thinking agent to a thinking-enabled agent,
        * convert AI messages with tool calls to HumanMessages to avoid thinking block requirements.
        * This is required by Anthropic/Bedrock when thinking is enabled.
+       * Skip when we've disabled thinking for forced tool choice (pending sub-agent state).
        */
       const isAnthropicWithThinking =
-        (agentContext.provider === Providers.ANTHROPIC &&
+        toolChoiceOverride == null &&
+        ((agentContext.provider === Providers.ANTHROPIC &&
           (agentContext.clientOptions as t.AnthropicClientOptions).thinking !=
             null) ||
-        (agentContext.provider === Providers.BEDROCK &&
-          (agentContext.clientOptions as t.BedrockAnthropicInput)
-            .additionalModelRequestFields?.['thinking'] != null);
+          (agentContext.provider === Providers.BEDROCK &&
+            (agentContext.clientOptions as t.BedrockAnthropicInput)
+              .additionalModelRequestFields?.['thinking'] != null));
 
       if (isAnthropicWithThinking) {
         finalMessages = ensureThinkingBlockInMessages(
@@ -875,14 +930,24 @@ export class StandardGraph extends Graph<t.BaseGraphState, t.GraphNode> {
         let lastError: unknown = primaryError;
         for (const fb of fallbacks) {
           try {
+            const fbClientOptions =
+              getClientOptionsForForcedToolChoice(
+                fb.provider,
+                fb.clientOptions,
+                toolChoiceOverride != null
+              ) ?? fb.clientOptions;
             let model = this.getNewModel({
               provider: fb.provider,
-              clientOptions: fb.clientOptions,
+              clientOptions: fbClientOptions,
             });
-            const bindableTools = agentContext.tools;
-            const fallbackBindOptions = getParallelToolCallDisableOptions(
-              fb.provider
-            );
+            const bindableTools = toolsForBinding ?? agentContext.tools;
+            const fallbackBindOptions =
+              toolChoiceOverride != null
+                ? {
+                  ...getParallelToolCallDisableOptions(fb.provider),
+                  tool_choice: getRequiredToolChoice(fb.provider),
+                }
+                : getParallelToolCallDisableOptions(fb.provider);
             model = (
               !bindableTools || bindableTools.length === 0
                 ? model

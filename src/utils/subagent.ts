@@ -131,3 +131,104 @@ export const PENDING_SUBAGENT_TOOLS = [
   'run_sub_agent',
   'await_subagent_results',
 ] as const;
+
+const POST_RUN_AUDIT_TOOL_NAMES = new Set([
+  'run_sub_agent',
+  'check_subagent_status',
+  'await_subagent_results',
+]);
+
+interface PostRunAuditParsed {
+  postRunAuditRequired?: boolean;
+  auditPlanId?: string;
+  auditPrompt?: string;
+}
+
+function extractPostRunAudit(content: unknown): {
+  postRunAuditRequired: boolean;
+  auditPlanId?: string;
+  auditPrompt?: string;
+} | null {
+  let parsed: PostRunAuditParsed | null = null;
+  if (typeof content === 'string') {
+    try {
+      parsed = JSON.parse(content) as PostRunAuditParsed;
+    } catch {
+      return null;
+    }
+  } else if (typeof content === 'object' && content !== null) {
+    parsed = content as PostRunAuditParsed;
+  }
+  if (parsed?.postRunAuditRequired === true) {
+    return {
+      postRunAuditRequired: true,
+      auditPlanId: parsed.auditPlanId,
+      auditPrompt: parsed.auditPrompt,
+    };
+  }
+  return null;
+}
+
+/**
+ * Detects if the last tool output contained postRunAuditRequired (from run_sub_agent sync path,
+ * or check_subagent_status/await_subagent_results async path). When true, the agent must call
+ * run_sub_agent with agentId system-auditor to audit the run. Tool filtering restricts to
+ * run_sub_agent only.
+ *
+ * @param messages - Conversation messages
+ * @returns { pending: true, auditPlanId, auditPrompt } when audit required; { pending: false } otherwise
+ */
+export function getPostRunAuditPendingState(messages: BaseMessage[]): {
+  pending: boolean;
+  auditPlanId?: string;
+  auditPrompt?: string;
+} {
+  if (!messages || messages.length === 0) return { pending: false };
+
+  let lastAIIndex = -1;
+  const toolCallIdToName = new Map<string, string>();
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (isAIMessage(msg)) {
+      const toolCalls = msg.tool_calls;
+      if (Array.isArray(toolCalls) && toolCalls.length > 0) {
+        for (const tc of toolCalls) {
+          if (tc.id && tc.name) toolCallIdToName.set(tc.id, tc.name);
+        }
+        lastAIIndex = i;
+        break;
+      }
+    }
+  }
+
+  if (lastAIIndex < 0 || toolCallIdToName.size === 0) return { pending: false };
+
+  for (let i = lastAIIndex + 1; i < messages.length; i++) {
+    const msg = messages[i];
+    if (isAIMessage(msg)) {
+      return { pending: false };
+    }
+    if (msg instanceof ToolMessage) {
+      const toolCallId = msg.tool_call_id;
+      const toolName = toolCallId
+        ? toolCallIdToName.get(toolCallId)
+        : undefined;
+      if (toolName && POST_RUN_AUDIT_TOOL_NAMES.has(toolName)) {
+        const audit = extractPostRunAudit(msg.content);
+        if (audit) {
+          return {
+            pending: true,
+            auditPlanId: audit.auditPlanId,
+            auditPrompt: audit.auditPrompt,
+          };
+        }
+      }
+    }
+  }
+
+  return { pending: false };
+}
+
+/** Tool names allowed when post-run audit is required (only run_sub_agent to delegate to Auditor) */
+export const POST_RUN_AUDIT_TOOLS = ['run_sub_agent'] as const;

@@ -59,8 +59,10 @@ import {
   getParallelToolCallDisableOptions,
   getRequiredToolChoice,
   getPendingSubAgentState,
+  getPostRunAuditPendingState,
   getClientOptionsForForcedToolChoice,
   PENDING_SUBAGENT_TOOLS,
+  POST_RUN_AUDIT_TOOLS,
 } from '@/utils';
 import { getChatModelClass, manualToolStreamProviders } from '@/llm/providers';
 import { ToolNode as CustomToolNode, toolsCondition } from '@/tools/ToolNode';
@@ -712,11 +714,26 @@ export class StandardGraph extends Graph<t.BaseGraphState, t.GraphNode> {
         agentContext.markToolsAsDiscovered(discoveredNames);
       }
 
+      const postRunAuditState = getPostRunAuditPendingState(messages);
       const pendingState = getPendingSubAgentState(messages);
       let toolsForBinding = agentContext.getToolsForBinding();
       let toolChoiceOverride: string | Record<string, unknown> | undefined;
 
       if (
+        postRunAuditState.pending &&
+        toolsForBinding &&
+        toolsForBinding.length > 0
+      ) {
+        const allowedSet = new Set<string>(POST_RUN_AUDIT_TOOLS);
+        toolsForBinding = toolsForBinding.filter((t) => {
+          const name =
+            typeof t === 'object' && t != null && 'name' in t
+              ? (t as { name: string }).name
+              : undefined;
+          return name && allowedSet.has(name);
+        });
+        toolChoiceOverride = getRequiredToolChoice(agentContext.provider);
+      } else if (
         pendingState.pending &&
         toolsForBinding &&
         toolsForBinding.length > 0
@@ -803,7 +820,14 @@ export class StandardGraph extends Graph<t.BaseGraphState, t.GraphNode> {
         finalMessages = formatContentStrings(finalMessages);
       }
 
-      if (pendingState.pending && pendingState.planIds.length > 0) {
+      if (postRunAuditState.pending && postRunAuditState.auditPrompt) {
+        const pendingInstruction = new HumanMessage({
+          content: `[System reminder] Post-run audit required. You MUST call run_sub_agent now with agentId: system-auditor and the following prompt. No other tools are available.
+
+${postRunAuditState.auditPrompt}`,
+        });
+        finalMessages = [...finalMessages, pendingInstruction];
+      } else if (pendingState.pending && pendingState.planIds.length > 0) {
         const planIdsList = pendingState.planIds.join(', ');
         const pendingInstruction = new HumanMessage({
           content: `[System reminder] You have delegated work to sub-agents. Pending plan(s): ${planIdsList}.

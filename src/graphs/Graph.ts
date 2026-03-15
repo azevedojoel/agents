@@ -63,6 +63,7 @@ import {
   getClientOptionsForForcedToolChoice,
   PENDING_SUBAGENT_TOOLS,
   POST_RUN_AUDIT_TOOLS,
+  computeRemainingSteps,
 } from '@/utils';
 import { getChatModelClass, manualToolStreamProviders } from '@/llm/providers';
 import { ToolNode as CustomToolNode, toolsCondition } from '@/tools/ToolNode';
@@ -837,6 +838,22 @@ You must now either:
 You cannot continue until you await. When multiple plans exist, specify which planId to await.`,
         });
         finalMessages = [...finalMessages, pendingInstruction];
+      }
+
+      const recursionLimit = (config as { recursionLimit?: number })
+        .recursionLimit;
+      const remainingSteps = computeRemainingSteps(messages, recursionLimit);
+      const iterationBudgetEnabled =
+        process.env.AGENT_ITERATION_BUDGET_REMINDER !== 'false';
+      if (iterationBudgetEnabled && remainingSteps != null) {
+        const totalHint =
+          typeof recursionLimit === 'number'
+            ? ` (${remainingSteps} of ${recursionLimit} steps remaining)`
+            : '';
+        const budgetInstruction = new HumanMessage({
+          content: `[System] You have approximately ${remainingSteps} steps remaining before the run ends${totalHint}. Use them efficiently; avoid repeating the same tool call without new information.`,
+        });
+        finalMessages = [...finalMessages, budgetInstruction];
       }
 
       const lastMessageX =

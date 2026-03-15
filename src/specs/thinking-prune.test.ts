@@ -405,6 +405,58 @@ describe('Prune Messages with Thinking Mode Tests', () => {
     expect(() => pruneMessages({ messages })).not.toThrow();
   });
 
+  it('should not throw when last message is Tool and preceding AI has no thinking block (malformed sequence)', () => {
+    // Regression: thinking sequence detected but no AI with thinking block.
+    // Occurs with agent handoffs, sub-agent returns, or resumed conversations.
+    const tokenCounter = createTestTokenCounter();
+
+    const assistantMessageNoThinking = new AIMessage({
+      content: [
+        {
+          type: 'text',
+          text: 'Let me check that:',
+        },
+        {
+          type: 'tool_use',
+          id: 'tool_abc',
+          name: 'some_tool',
+          input: '{}',
+        },
+      ],
+    });
+
+    const toolResponseMessage = new ToolMessage({
+      content: [{ type: 'text', text: 'Tool result' }],
+      tool_call_id: 'tool_abc',
+      name: 'some_tool',
+    });
+
+    const messages = [
+      new SystemMessage('System instruction'),
+      new HumanMessage('Hello'),
+      assistantMessageNoThinking,
+      toolResponseMessage, // Last message is Tool; preceding AI has no thinking block
+    ];
+
+    const indexTokenCountMap: Record<string, number> = {};
+    for (let i = 0; i < messages.length; i++) {
+      indexTokenCountMap[i] = tokenCounter(messages[i]);
+    }
+
+    const pruneMessages = createPruneMessages({
+      maxTokens: 50, // Force pruning to trigger the malformed-sequence path
+      startIndex: 0,
+      tokenCounter,
+      indexTokenCountMap: { ...indexTokenCountMap },
+      thinkingEnabled: true,
+    });
+
+    expect(() => pruneMessages({ messages })).not.toThrow();
+    const result = pruneMessages({ messages });
+    expect(result.context.length).toBeGreaterThan(0);
+    expect(result.context.length).toBeLessThanOrEqual(messages.length);
+  });
+
   it('should preserve AI <--> tool message correspondences when pruning', () => {
     // Create a token counter
     const tokenCounter = createTestTokenCounter();

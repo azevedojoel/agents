@@ -265,15 +265,15 @@ export function getMessagesWithinTokenLimit({
   }
 
   if (thinkingEndIndex > -1 && thinkingStartIndex < 0) {
-    throw new Error(
-      'The payload is malformed. There is a thinking sequence but no "AI" messages with thinking blocks.'
-    );
+    // Malformed sequence: no AI with thinking block. Treat as normal pruning.
+    result.context = context.reverse() as BaseMessage[];
+    return result;
   }
 
   if (!thinkingBlock) {
-    throw new Error(
-      'The payload is malformed. There is a thinking sequence but no thinking block found.'
-    );
+    // Malformed sequence: thinking block not found. Treat as normal pruning.
+    result.context = context.reverse() as BaseMessage[];
+    return result;
   }
 
   // Since we have a thinking sequence, we need to find the last assistant message

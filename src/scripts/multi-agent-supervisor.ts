@@ -120,7 +120,7 @@ async function testSupervisorMultiAgent() {
 
   // Track which specialist role was selected
   let selectedRole = '';
-  let roleInstructions = '';
+  const roleInstructions = '';
 
   // Create custom handlers
   const customHandlers = {

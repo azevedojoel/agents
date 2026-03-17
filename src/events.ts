@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 // src/events.ts
 import type {
   ToolMessage,

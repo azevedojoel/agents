@@ -459,7 +459,7 @@ export function createContentAggregator(): t.ContentAggregatorResult {
     finalUpdate = false
   ): void => {
     if (!contentPart) {
-      console.warn('No content part found in \'updateContent\'');
+      console.warn("No content part found in 'updateContent'");
       return;
     }
     const partType = contentPart.type ?? '';
@@ -949,7 +949,7 @@ export function createContentAggregator(): t.ContentAggregatorResult {
             targetIndex = contentParts.length;
             contentParts.push(undefined);
           } else {
-            // AgentId-based split: when agent changes (e.g. Ellis -> Casey), start a new think block.
+            // AgentId-based split: when agent changes (e.g. Ellis -> sub-agent), start a new think block.
             // Fallback when agent_return is absent (e.g. transfer without return_control).
             const lastThinkMeta = contentMetaMap.get(targetIndex);
             const lastAgentId = lastThinkMeta?.agentId;

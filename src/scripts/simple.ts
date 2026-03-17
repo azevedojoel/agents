@@ -22,7 +22,7 @@ import { Run } from '@/run';
 
 const conversationHistory: BaseMessage[] = [];
 let _contentParts: t.MessageContentComplex[] = [];
-let collectedUsage: UsageMetadata[] = [];
+const collectedUsage: UsageMetadata[] = [];
 
 async function testStandardStreaming(): Promise<void> {
   const {

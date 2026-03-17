@@ -158,7 +158,7 @@ export type CompiledAgentWorfklow = CompiledStateGraph<
   StateDefinition,
   {
     [x: `agent=${string}`]: Partial<BaseGraphState>;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     [x: `tools=${string}`]: any;
   }
 >;
@@ -177,7 +177,7 @@ export type SystemRunnable =
  */
 export type CompileOptions = {
   // A checkpointer instance (e.g., MemorySaver, SQL saver)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   checkpointer?: any;
   interruptBefore?: string[];
   interruptAfter?: string[];

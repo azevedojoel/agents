@@ -12,7 +12,6 @@ import type * as e from '@/common/enum';
 import type * as g from '@/types/graph';
 import type * as l from '@/types/llm';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type ZodObjectAny = z.ZodObject<any, any, any, any>;
 export type BaseGraphConfig = {
   llmConfig: l.LLMConfig;

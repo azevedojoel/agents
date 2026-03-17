@@ -71,11 +71,11 @@ describe('Prune Messages with Thinking Mode Tests', () => {
         {
           type: 'thinking',
           thinking:
-            'The user is asking me to read a file located at `/home/danny/LibreChat/gistfile1.txt` in chunks of 200 lines at a time, mentioning that the file has 5000 lines total. They want me to continue reading through the entire file without stopping.\n\nI\'ll need to use the text editor tool to view the file in chunks of 200 lines each. Since the file has 5000 lines, I\'ll need to view it in 25 chunks (5000 ÷ 200 = 25).\n\nI\'ll need to make multiple calls to the text editor with the `view` command, specifying different line ranges for each call.\n\nLet me plan out the approach:\n1. Start with lines 1-200\n2. Then 201-400\n3. Then 401-600\n4. And so on until I reach 4801-5000\n\nFor each call, I\'ll use the `view` command with the specific line range in the `view_range` parameter. I\'ll continue until I\'ve shown all 5000 lines as requested.',
+            "The user is asking me to read a file located at `/home/danny/LibreChat/gistfile1.txt` in chunks of 200 lines at a time, mentioning that the file has 5000 lines total. They want me to continue reading through the entire file without stopping.\n\nI'll need to use the text editor tool to view the file in chunks of 200 lines each. Since the file has 5000 lines, I'll need to view it in 25 chunks (5000 ÷ 200 = 25).\n\nI'll need to make multiple calls to the text editor with the `view` command, specifying different line ranges for each call.\n\nLet me plan out the approach:\n1. Start with lines 1-200\n2. Then 201-400\n3. Then 401-600\n4. And so on until I reach 4801-5000\n\nFor each call, I'll use the `view` command with the specific line range in the `view_range` parameter. I'll continue until I've shown all 5000 lines as requested.",
         },
         {
           type: 'text',
-          text: 'I\'ll read the file for you in chunks of 200 lines at a time until all 5000 lines are displayed.\n\nLet me start with the first 200 lines:',
+          text: "I'll read the file for you in chunks of 200 lines at a time until all 5000 lines are displayed.\n\nLet me start with the first 200 lines:",
         },
         {
           type: 'tool_use',
@@ -102,7 +102,7 @@ describe('Prune Messages with Thinking Mode Tests', () => {
       content: [
         {
           type: 'text',
-          text: 'It looks like the file content is clipped in the response. I\'ll continue with the next chunks:',
+          text: "It looks like the file content is clipped in the response. I'll continue with the next chunks:",
         },
         {
           type: 'tool_use',
@@ -156,7 +156,7 @@ describe('Prune Messages with Thinking Mode Tests', () => {
       content: [
         {
           type: 'text',
-          text: 'Let\'s continue with the next chunk:',
+          text: "Let's continue with the next chunk:",
         },
         {
           type: 'tool_use',

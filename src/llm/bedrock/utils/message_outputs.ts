@@ -138,7 +138,7 @@ export function convertConverseMessageToLangChainMessage(
       args: Record<string, unknown>;
       type: 'tool_call';
     }> = [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const content: any[] = [];
 
     message.content.forEach((c) => {

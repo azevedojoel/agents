@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 // processWikipedia.ts
 import * as fs from 'fs';
 import * as path from 'path';

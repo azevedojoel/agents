@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 // src/utils/events.ts
 import { dispatchCustomEvent } from '@langchain/core/callbacks/dispatch';
 import type { RunnableConfig } from '@langchain/core/runnables';

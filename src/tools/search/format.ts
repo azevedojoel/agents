@@ -186,10 +186,10 @@ export function formatResultsForLLM(
         : '',
       results.knowledgeGraph.attributes != null
         ? `**Attributes:**\n\`\`\`json\n${JSON.stringify(
-          results.knowledgeGraph.attributes,
-          null,
-          2
-        )}\n\`\`\``
+            results.knowledgeGraph.attributes,
+            null,
+            2
+          )}\n\`\`\``
         : '',
       '',
     ].filter(Boolean);
@@ -209,8 +209,8 @@ export function formatResultsForLLM(
         : '',
       results.answerBox.snippetHighlighted != null
         ? `**Snippet Highlighted:** ${results.answerBox.snippetHighlighted
-          .map((s) => `\`${s}\``)
-          .join(' ')}`
+            .map((s) => `\`${s}\``)
+            .join(' ')}`
         : '',
       results.answerBox.link != null
         ? `**Link:** ${results.answerBox.link}`

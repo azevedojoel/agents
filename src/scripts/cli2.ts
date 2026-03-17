@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 // src/scripts/cli2.ts
 import { config } from 'dotenv';
 config();

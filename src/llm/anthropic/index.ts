@@ -64,7 +64,6 @@ function _thinkingInParams(
 function _compactionInParams(
   params: AnthropicMessageCreateParams | AnthropicStreamingMessageCreateParams
 ): boolean {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const cm = (params as any).context_management;
   return !!cm?.edits?.some(
     (e: { type: string }) => e.type === 'compact_20260112'
@@ -138,7 +137,7 @@ export type CustomAnthropicInput = AnthropicInput & {
   _lc_stream_delay?: number;
   outputConfig?: AnthropicOutputConfig;
   inferenceGeo?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   contextManagement?: any;
 } & BaseChatModelParams;
 
@@ -146,7 +145,7 @@ export type CustomAnthropicInput = AnthropicInput & {
  * A type representing additional parameters that can be passed to the
  * Anthropic API.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 type Kwargs = Record<string, any>;
 
 export class CustomAnthropic extends ChatAnthropicMessages {
@@ -158,7 +157,7 @@ export class CustomAnthropic extends ChatAnthropicMessages {
   top_k: number | undefined;
   outputConfig?: AnthropicOutputConfig;
   inferenceGeo?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   contextManagement?: any;
   constructor(fields?: CustomAnthropicInput) {
     super(fields);
@@ -193,9 +192,8 @@ export class CustomAnthropic extends ChatAnthropicMessages {
         (this as Record<string, unknown>).tool_choice) as
         | AnthropicToolChoice
         | undefined
-      );
+    );
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const callOptions = options as Record<string, any> | undefined;
     const mergedOutputConfig: AnthropicOutputConfig | undefined = (():
       | AnthropicOutputConfig

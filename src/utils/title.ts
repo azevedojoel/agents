@@ -44,10 +44,10 @@ export const createTitleRunnable = async (
   _titlePrompt?: string
 ): Promise<Runnable> => {
   // Disabled since this works fine
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+
   /* @ts-ignore */
   const titleLLM = model.withStructuredOutput(titleSchema);
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+
   /* @ts-ignore */
   const combinedLLM = model.withStructuredOutput(combinedSchema);
 

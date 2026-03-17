@@ -41,11 +41,11 @@ function addThinkingBlock(
   const content: MessageContentComplex[] = Array.isArray(message.content)
     ? (message.content as MessageContentComplex[])
     : [
-      {
-        type: ContentTypes.TEXT,
-        text: message.content,
-      },
-    ];
+        {
+          type: ContentTypes.TEXT,
+          text: message.content,
+        },
+      ];
   /** Edge case, the message already has the thinking block */
   if (content[0].type === thinkingBlock.type) {
     return message;

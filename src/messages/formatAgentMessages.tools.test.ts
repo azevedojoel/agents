@@ -40,7 +40,7 @@ describe('formatAgentMessages with tools parameter', () => {
 
   it('should filter out all tool calls when tools set is empty', () => {
     const payload: TPayload = [
-      { role: 'user', content: 'What\'s the weather?' },
+      { role: 'user', content: "What's the weather?" },
       {
         role: 'assistant',
         content: [
@@ -78,7 +78,7 @@ describe('formatAgentMessages with tools parameter', () => {
 
   it('should filter out tool calls not in the allowed set', () => {
     const payload: TPayload = [
-      { role: 'user', content: 'What\'s the weather?' },
+      { role: 'user', content: "What's the weather?" },
       {
         role: 'assistant',
         content: [
@@ -116,7 +116,7 @@ describe('formatAgentMessages with tools parameter', () => {
 
   it('should not convert tool messages when tool is in the allowed set', () => {
     const payload: TPayload = [
-      { role: 'user', content: 'What\'s the weather?' },
+      { role: 'user', content: "What's the weather?" },
       {
         role: 'assistant',
         content: [
@@ -219,7 +219,7 @@ describe('formatAgentMessages with tools parameter', () => {
 
   it('should update indexTokenCountMap correctly when converting tool messages', () => {
     const payload: TPayload = [
-      { role: 'user', content: 'What\'s the weather?' },
+      { role: 'user', content: "What's the weather?" },
       {
         role: 'assistant',
         content: [
@@ -312,7 +312,7 @@ describe('formatAgentMessages with tools parameter', () => {
         content: [
           {
             type: ContentTypes.TEXT,
-            [ContentTypes.TEXT]: 'I\'ll search for information first.',
+            [ContentTypes.TEXT]: "I'll search for information first.",
             tool_call_ids: ['search_1'],
           },
           {
@@ -331,7 +331,7 @@ describe('formatAgentMessages with tools parameter', () => {
         content: [
           {
             type: ContentTypes.TEXT,
-            [ContentTypes.TEXT]: 'Now I\'ll check the weather.',
+            [ContentTypes.TEXT]: "Now I'll check the weather.",
             tool_call_ids: ['weather_1'],
           },
           {
@@ -350,7 +350,7 @@ describe('formatAgentMessages with tools parameter', () => {
         content: [
           {
             type: ContentTypes.TEXT,
-            [ContentTypes.TEXT]: 'Finally, I\'ll calculate something.',
+            [ContentTypes.TEXT]: "Finally, I'll calculate something.",
             tool_call_ids: ['calc_1'],
           },
           {
@@ -366,7 +366,7 @@ describe('formatAgentMessages with tools parameter', () => {
       },
       {
         role: 'assistant',
-        content: 'Here\'s your answer based on all that information.',
+        content: "Here's your answer based on all that information.",
       },
     ];
 

@@ -76,23 +76,23 @@ export function convertAuthorToRole(
   author: string
 ): (typeof POSSIBLE_ROLES)[number] {
   switch (author) {
-  /**
+    /**
      *  Note: Gemini currently is not supporting system messages
      *  we will convert them to human messages and merge with following
      * */
-  case 'supervisor':
-  case 'ai':
-  case 'model': // getMessageAuthor returns message.name. code ex.: return message.name ?? type;
-    return 'model';
-  case 'system':
-    return 'system';
-  case 'human':
-    return 'user';
-  case 'tool':
-  case 'function':
-    return 'function';
-  default:
-    throw new Error(`Unknown / unsupported author: ${author}`);
+    case 'supervisor':
+    case 'ai':
+    case 'model': // getMessageAuthor returns message.name. code ex.: return message.name ?? type;
+      return 'model';
+    case 'system':
+      return 'system';
+    case 'human':
+      return 'user';
+    case 'tool':
+    case 'function':
+      return 'function';
+    default:
+      throw new Error(`Unknown / unsupported author: ${author}`);
   }
 }
 
@@ -368,8 +368,8 @@ export function convertMessageContentToParts(
 
     const result = Array.isArray(message.content)
       ? (message.content
-        .map((c) => _convertLangChainContentToPart(c, isMultimodalModel))
-        .filter((p) => p !== undefined) as Part[])
+          .map((c) => _convertLangChainContentToPart(c, isMultimodalModel))
+          .filter((p) => p !== undefined) as Part[])
       : message.content;
 
     if (message.status === 'error') {

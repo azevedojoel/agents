@@ -1075,7 +1075,6 @@ export class MultiAgentGraph extends StandardGraph {
 
     // Add starting edges for all starting nodes
     for (const startNode of this.startingNodes) {
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       /** @ts-ignore */
       builder.addEdge(START, startNode);
     }
@@ -1170,14 +1169,13 @@ export class MultiAgentGraph extends StandardGraph {
         for (const edge of edges) {
           const sources = Array.isArray(edge.from) ? edge.from : [edge.from];
           for (const source of sources) {
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
             /** @ts-ignore */
             builder.addEdge(source, wrapperNodeId);
           }
         }
 
         /** Single edge from wrapper to destination */
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+
         /** @ts-ignore */
         builder.addEdge(wrapperNodeId, destination);
       } else {
@@ -1200,7 +1198,6 @@ export class MultiAgentGraph extends StandardGraph {
               continue;
             }
 
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
             /** @ts-ignore */
             builder.addEdge(source, destination);
           }

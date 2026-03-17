@@ -10,20 +10,20 @@ export function isPresent(value: string | null | undefined): value is string {
 const unescapeString = (string: string): string =>
   string.replace(/\\(.)/g, (_, char) => {
     switch (char) {
-    case 'n':
-      return '\n';
-    case 't':
-      return '\t';
-    case 'r':
-      return '\r';
-    case '"':
-      return '"';
-    case '\'':
-      return '\'';
-    case '\\':
-      return '\\';
-    default:
-      return char;
+      case 'n':
+        return '\n';
+      case 't':
+        return '\t';
+      case 'r':
+        return '\r';
+      case '"':
+        return '"';
+      case "'":
+        return "'";
+      case '\\':
+        return '\\';
+      default:
+        return char;
     }
   });
 

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { config } from 'dotenv';
 config();
 import { HumanMessage } from '@langchain/core/messages';
-import { tool } from "@langchain/core/tools";
+import { tool } from '@langchain/core/tools';
 import { getArgs } from '@/scripts/args';
 import { Run } from '@/run';
 import { getLLMConfig } from '@/utils/llmConfig';
@@ -32,31 +32,35 @@ async function testPingServer(): Promise<void> {
       handle: (_event: string, data: t.StreamEventData): void => {
         console.log('====== ON_RUN_STEP_COMPLETED ======');
         console.dir(data, { depth: null });
-      }
+      },
     },
     [GraphEvents.ON_RUN_STEP]: {
       handle: (_event: string, data: t.StreamEventData): void => {
         console.log('====== ON_RUN_STEP ======');
         console.dir(data, { depth: null });
-      }
+      },
     },
     [GraphEvents.ON_RUN_STEP_DELTA]: {
       handle: (_event: string, data: t.StreamEventData): void => {
         console.log('====== ON_RUN_STEP_DELTA ======');
         console.dir(data, { depth: null });
-      }
+      },
     },
     [GraphEvents.ON_MESSAGE_DELTA]: {
       handle: (_event: string, data: t.StreamEventData): void => {
         console.log('====== ON_MESSAGE_DELTA ======');
         console.dir(data, { depth: null });
-      }
+      },
     },
     [GraphEvents.TOOL_START]: {
-      handle: (_event: string, data: t.StreamEventData, metadata?: Record<string, unknown>): void => {
+      handle: (
+        _event: string,
+        data: t.StreamEventData,
+        metadata?: Record<string, unknown>
+      ): void => {
         console.log('====== TOOL_START ======');
         console.dir(data, { depth: null });
-      }
+      },
     },
     // [GraphEvents.LLM_STREAM]: new LLMStreamHandler(),
     // [GraphEvents.LLM_START]: {
@@ -118,7 +122,7 @@ async function testPingServer(): Promise<void> {
 
   console.log('Pinging server test:');
 
-  const userMessage = "Please ping the server.";
+  const userMessage = 'Please ping the server.';
   const inputs = {
     messages: [new HumanMessage(userMessage)],
   };

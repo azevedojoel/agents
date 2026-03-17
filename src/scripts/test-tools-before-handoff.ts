@@ -23,7 +23,7 @@ async function testToolsBeforeHandoff() {
   const { contentParts, aggregateContent } = createContentAggregator();
 
   // Track tool calls and handoffs
-  let toolCallCount = 0;
+  const toolCallCount = 0;
   let handoffOccurred = false;
 
   // Create custom handlers

@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment */
-/* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { type OpenAI as OpenAIClient } from 'openai';
 import type {
   ChatCompletionContentPartText,
@@ -95,23 +93,23 @@ function extractGenericMessageCustomRole(message: ChatMessage) {
 export function messageToOpenAIRole(message: BaseMessage): OpenAIRoleEnum {
   const type = message._getType();
   switch (type) {
-  case 'system':
-    return 'system';
-  case 'ai':
-    return 'assistant';
-  case 'human':
-    return 'user';
-  case 'function':
-    return 'function';
-  case 'tool':
-    return 'tool';
-  case 'generic': {
-    if (!ChatMessage.isInstance(message))
-      throw new Error('Invalid generic chat message');
-    return extractGenericMessageCustomRole(message);
-  }
-  default:
-    throw new Error(`Unknown message type: ${type}`);
+    case 'system':
+      return 'system';
+    case 'ai':
+      return 'assistant';
+    case 'human':
+      return 'user';
+    case 'function':
+      return 'function';
+    case 'tool':
+      return 'tool';
+    case 'generic': {
+      if (!ChatMessage.isInstance(message))
+        throw new Error('Invalid generic chat message');
+      return extractGenericMessageCustomRole(message);
+    }
+    default:
+      throw new Error(`Unknown message type: ${type}`);
   }
 }
 
@@ -245,9 +243,9 @@ const completionsApiContentBlockConverter: StandardContentBlockConverter<{
           file_data: block.url, // formatted as base64 data URL
           ...(block.metadata?.filename || block.metadata?.name
             ? {
-              filename: (block.metadata.filename ||
+                filename: (block.metadata.filename ||
                   block.metadata.name) as string,
-            }
+              }
             : {}),
         },
       };
@@ -262,10 +260,10 @@ const completionsApiContentBlockConverter: StandardContentBlockConverter<{
           block.metadata?.name ||
           block.metadata?.title
             ? {
-              filename: (block.metadata.filename ||
+                filename: (block.metadata.filename ||
                   block.metadata.name ||
                   block.metadata.title) as string,
-            }
+              }
             : {}),
         },
       };
@@ -315,18 +313,18 @@ export function _convertMessagesToOpenAIParams(
       typeof message.content === 'string'
         ? message.content
         : message.content.map((m) => {
-          if ('type' in m && m.type === 'thinking') {
-            hasAnthropicThinkingBlock = true;
+            if ('type' in m && m.type === 'thinking') {
+              hasAnthropicThinkingBlock = true;
+              return m;
+            }
+            if (isDataContentBlock(m)) {
+              return convertToProviderContentBlock(
+                m,
+                completionsApiContentBlockConverter
+              );
+            }
             return m;
-          }
-          if (isDataContentBlock(m)) {
-            return convertToProviderContentBlock(
-              m,
-              completionsApiContentBlockConverter
-            );
-          }
-          return m;
-        });
+          });
 
     // Filter out empty text blocks - API rejects "text content blocks must be non-empty"
     // Filter out Anthropic thinking blocks and tool_use - OpenAI API only supports: text, image_url, input_audio, refusal, audio, file
@@ -335,29 +333,28 @@ export function _convertMessagesToOpenAIParams(
       typeof rawContent === 'string'
         ? rawContent
         : rawContent.filter((m) => {
-          if (
-            m &&
+            if (
+              m &&
               typeof m === 'object' &&
               'type' in m &&
               (m.type === 'thinking' ||
                 m.type === 'redacted_thinking' ||
                 m.type === 'tool_use')
-          ) {
-            return false;
-          }
-          if (
-            m &&
+            ) {
+              return false;
+            }
+            if (
+              m &&
               typeof m === 'object' &&
               'type' in m &&
               m.type === 'text'
-          ) {
-            const text = (m as { text?: string }).text;
-            return text != null && text !== '';
-          }
-          return true;
-        });
+            ) {
+              const text = (m as { text?: string }).text;
+              return text != null && text !== '';
+            }
+            return true;
+          });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const completionParam: Record<string, any> = {
       role,
       content,
@@ -519,18 +516,18 @@ function _convertReasoningSummaryToOpenAIResponsesParams(
   const summary = (
     reasoning.summary.length > 1
       ? reasoning.summary.reduce(
-        (acc, curr) => {
-          const last = acc.at(-1);
+          (acc, curr) => {
+            const last = acc.at(-1);
 
-          if (last!.index === curr.index) {
+            if (last!.index === curr.index) {
               last!.text += curr.text;
-          } else {
-            acc.push(curr);
-          }
-          return acc;
-        },
-        [{ ...reasoning.summary[0] }]
-      )
+            } else {
+              acc.push(curr);
+            }
+            return acc;
+          },
+          [{ ...reasoning.summary[0] }]
+        )
       : reasoning.summary
   ).map((s) =>
     Object.fromEntries(Object.entries(s).filter(([k]) => k !== 'index'))
@@ -666,21 +663,21 @@ export function _convertMessagesToOpenAIResponsesParams(
             typeof content === 'string'
               ? content
               : content.flatMap((item) => {
-                if (item.type === 'text') {
-                  return {
-                    type: 'output_text',
-                    text: item.text,
-                    // @ts-expect-error TODO: add types for `annotations`
-                    annotations: item.annotations ?? [],
-                  };
-                }
+                  if (item.type === 'text') {
+                    return {
+                      type: 'output_text',
+                      text: item.text,
+                      // @ts-expect-error TODO: add types for `annotations`
+                      annotations: item.annotations ?? [],
+                    };
+                  }
 
-                if (item.type === 'output_text' || item.type === 'refusal') {
-                  return item;
-                }
+                  if (item.type === 'output_text' || item.type === 'refusal') {
+                    return item;
+                  }
 
-                return [];
-              }),
+                  return [];
+                }),
         });
 
         const functionCallIds = additional_kwargs[_FUNCTION_CALL_IDS_MAP_KEY];
@@ -1020,9 +1017,9 @@ export function _convertOpenAIResponsesDeltaToBaseMessageChunk(
     const summary: ChatOpenAIReasoningSummary['summary'] | undefined = chunk
       .item.summary
       ? chunk.item.summary.map((s, index) => ({
-        ...s,
-        index,
-      }))
+          ...s,
+          index,
+        }))
       : undefined;
 
     additional_kwargs.reasoning = {

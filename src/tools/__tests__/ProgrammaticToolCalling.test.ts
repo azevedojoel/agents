@@ -327,10 +327,10 @@ describe('ProgrammaticToolCalling', () => {
       it('handles real-world MCP no data response', () => {
         const result = {
           type: 'text',
-          text: 'No data found in range \'raw_data!A1:D25\' for user@example.com.',
+          text: "No data found in range 'raw_data!A1:D25' for user@example.com.",
         };
         expect(unwrapToolResponse(result, true)).toBe(
-          'No data found in range \'raw_data!A1:D25\' for user@example.com.'
+          "No data found in range 'raw_data!A1:D25' for user@example.com."
         );
       });
     });
@@ -607,7 +607,7 @@ for member in team:
       const [output] = formatCompletedResponse(response);
 
       expect(output).toContain(
-        'stdout: Empty. Ensure you\'re writing output explicitly'
+        "stdout: Empty. Ensure you're writing output explicitly"
       );
     });
 

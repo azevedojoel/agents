@@ -57,9 +57,9 @@ function makeRunStep(
   const stepDetails: t.StepDetails =
     type === StepTypes.MESSAGE_CREATION
       ? {
-        type: StepTypes.MESSAGE_CREATION,
-        message_creation: { message_id: 'msg-1' },
-      }
+          type: StepTypes.MESSAGE_CREATION,
+          message_creation: { message_id: 'msg-1' },
+        }
       : { type: StepTypes.TOOL_CALLS, tool_calls: opts?.tool_calls ?? [] };
   return {
     type,

@@ -515,11 +515,11 @@ export class StandardGraph extends Graph<t.BaseGraphState, t.GraphNode> {
     const traditionalToolMap =
       graphTools && graphTools.length > 0
         ? new Map([
-            ...(currentToolMap ?? new Map()),
-            ...graphTools
-              .filter((t): t is t.GenericTool & { name: string } => 'name' in t)
-              .map((t) => [t.name, t] as [string, t.GenericTool]),
-          ])
+          ...(currentToolMap ?? new Map()),
+          ...graphTools
+            .filter((t): t is t.GenericTool & { name: string } => 'name' in t)
+            .map((t) => [t.name, t] as [string, t.GenericTool]),
+        ])
         : currentToolMap;
 
     return new CustomToolNode<t.BaseGraphState>({
@@ -584,9 +584,9 @@ export class StandardGraph extends Graph<t.BaseGraphState, t.GraphNode> {
     const bindOptions =
       toolChoice != null
         ? {
-            ...getParallelToolCallDisableOptions(provider),
-            tool_choice: toolChoice,
-          }
+          ...getParallelToolCallDisableOptions(provider),
+          tool_choice: toolChoice,
+        }
         : getParallelToolCallDisableOptions(provider);
     return (model as t.ModelWithTools).bindTools(tools, bindOptions);
   }
@@ -833,7 +833,7 @@ ${postRunAuditState.auditPrompt}`,
           content: `[System reminder] You have delegated work to sub-agents. Pending plan(s): ${planIdsList}.
 You must now either:
 1. Wait for results (await_subagent_results) - pass planId for the plan you want to await
-2. Start new work (delegate_architect or delegate_auditor)
+2. Start new work (delegate_architects or delegate_auditor)
 You cannot continue until you await. When multiple plans exist, specify which planId to await.`,
         });
         finalMessages = [...finalMessages, pendingInstruction];
@@ -989,9 +989,9 @@ You cannot continue until you await. When multiple plans exist, specify which pl
             const fallbackBindOptions =
               toolChoiceOverride != null
                 ? {
-                    ...getParallelToolCallDisableOptions(fb.provider),
-                    tool_choice: getRequiredToolChoice(fb.provider),
-                  }
+                  ...getParallelToolCallDisableOptions(fb.provider),
+                  tool_choice: getRequiredToolChoice(fb.provider),
+                }
                 : getParallelToolCallDisableOptions(fb.provider);
             model = (
               !bindableTools || bindableTools.length === 0

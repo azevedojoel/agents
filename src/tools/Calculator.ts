@@ -38,7 +38,7 @@ export class Calculator extends Tool {
     try {
       return math.evaluate(input).toString();
     } catch {
-      return 'I don\'t know how to do that.';
+      return "I don't know how to do that.";
     }
   }
 

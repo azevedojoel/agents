@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/explicit-function-return-type */
-/* eslint-disable @typescript-eslint/no-empty-object-type */
 import {
   BaseLLMOutputParser,
   OutputParserException,
@@ -12,12 +10,10 @@ import {
   InteropZodType,
 } from '@langchain/core/utils/types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface AnthropicToolsOutputParserParams<T extends Record<string, any>>
   extends JsonOutputKeyToolsParserParamsInterop<T> {}
 
 export class AnthropicToolsOutputParser<
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   T extends Record<string, any> = Record<string, any>,
 > extends BaseLLMOutputParser<T> {
   static lc_name() {
@@ -48,7 +44,6 @@ export class AnthropicToolsOutputParser<
     if (typeof result === 'string') {
       try {
         parsedResult = JSON.parse(result);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (e: any) {
         throw new OutputParserException(
           `Failed to parse. Text: "${JSON.stringify(
@@ -103,7 +98,6 @@ export class AnthropicToolsOutputParser<
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function extractToolCalls(content: Record<string, any>[]) {
   const toolCalls: ToolCall[] = [];
 

@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 // src/agents/AgentContext.ts
 import { SystemMessage } from '@langchain/core/messages';
 import { RunnableLambda } from '@langchain/core/runnables';

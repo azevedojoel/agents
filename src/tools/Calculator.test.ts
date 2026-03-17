@@ -188,7 +188,7 @@ describe('Calculator', () => {
   describe('error handling', () => {
     it('should return error message for invalid expression', async () => {
       const result = await calculator._call('invalid expression');
-      expect(result).toBe('I don\'t know how to do that.');
+      expect(result).toBe("I don't know how to do that.");
     });
 
     it('should handle division by zero', async () => {
@@ -198,27 +198,27 @@ describe('Calculator', () => {
 
     it('should return error message for incomplete expression', async () => {
       const result = await calculator._call('5 +');
-      expect(result).toBe('I don\'t know how to do that.');
+      expect(result).toBe("I don't know how to do that.");
     });
 
     it('should return error message for mismatched parentheses', async () => {
       const result = await calculator._call('(5 + 3');
-      expect(result).toBe('I don\'t know how to do that.');
+      expect(result).toBe("I don't know how to do that.");
     });
 
     it('should return error message for empty input', async () => {
       const result = await calculator._call('');
-      expect(result).toBe('I don\'t know how to do that.');
+      expect(result).toBe("I don't know how to do that.");
     });
 
     it('should return error message for only whitespace', async () => {
       const result = await calculator._call('   ');
-      expect(result).toBe('I don\'t know how to do that.');
+      expect(result).toBe("I don't know how to do that.");
     });
 
     it('should return error message for undefined variable', async () => {
       const result = await calculator._call('x + 5');
-      expect(result).toBe('I don\'t know how to do that.');
+      expect(result).toBe("I don't know how to do that.");
     });
   });
 

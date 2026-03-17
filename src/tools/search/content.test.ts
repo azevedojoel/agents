@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable no-console */
+
 // content.test.ts
 import * as fs from 'fs';
 import { processContent } from './content';

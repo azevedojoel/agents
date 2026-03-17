@@ -33,7 +33,6 @@ import {
 } from './utils';
 import { sleep } from '@/utils';
 
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 const iife = <T>(fn: () => T) => fn();
 
 export function isHeaders(headers: unknown): headers is Headers {
@@ -151,7 +150,7 @@ export class CustomOpenAIClient extends OpenAIClient {
 
     return (
       // use undefined this binding; fetch errors if bound to something else in browser/cloudflare
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+
       /** @ts-ignore */
       this.fetch.call(undefined, url, fetchOptions).finally(() => {
         clearTimeout(timeout);
@@ -186,7 +185,7 @@ export class CustomAzureOpenAIClient extends AzureOpenAIClient {
 
     return (
       // use undefined this binding; fetch errors if bound to something else in browser/cloudflare
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+
       /** @ts-ignore */
       this.fetch.call(undefined, url, fetchOptions).finally(() => {
         clearTimeout(timeout);
@@ -370,13 +369,12 @@ export class ChatOpenAI extends OriginalChatOpenAI<t.ChatOpenAICallOptions> {
         completion: choice.index ?? 0,
       };
       if (typeof chunk.content !== 'string') {
-        // eslint-disable-next-line no-console
         console.log(
           '[WARNING]: Received non-string content from OpenAI. This is currently not supported.'
         );
         continue;
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       const generationInfo: Record<string, any> = { ...newTokenIndices };
       if (choice.finish_reason != null) {
         generationInfo.finish_reason = choice.finish_reason;
@@ -709,10 +707,10 @@ export class ChatDeepSeek extends OriginalChatDeepSeek {
       additional_kwargs,
       usage_metadata: data.usage
         ? {
-          input_tokens: data.usage.prompt_tokens,
-          output_tokens: data.usage.completion_tokens,
-          total_tokens: data.usage.total_tokens,
-        }
+            input_tokens: data.usage.prompt_tokens,
+            output_tokens: data.usage.completion_tokens,
+            total_tokens: data.usage.total_tokens,
+          }
         : undefined,
       response_metadata: {
         model_name: data.model,
@@ -800,13 +798,12 @@ export class ChatDeepSeek extends OriginalChatDeepSeek {
         completion: choice.index ?? 0,
       };
       if (typeof chunk.content !== 'string') {
-        // eslint-disable-next-line no-console
         console.log(
           '[WARNING]: Received non-string content from OpenAI. This is currently not supported.'
         );
         continue;
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       const generationInfo: Record<string, any> = { ...newTokenIndices };
       if (choice.finish_reason != null) {
         generationInfo.finish_reason = choice.finish_reason;
@@ -989,10 +986,10 @@ export class ChatMoonshot extends ChatOpenAI {
       additional_kwargs,
       usage_metadata: data.usage
         ? {
-          input_tokens: data.usage.prompt_tokens,
-          output_tokens: data.usage.completion_tokens,
-          total_tokens: data.usage.total_tokens,
-        }
+            input_tokens: data.usage.prompt_tokens,
+            output_tokens: data.usage.completion_tokens,
+            total_tokens: data.usage.total_tokens,
+          }
         : undefined,
       response_metadata: {
         model_name: data.model,
@@ -1052,13 +1049,12 @@ export class ChatMoonshot extends ChatOpenAI {
         completion: choice.index ?? 0,
       };
       if (typeof chunk.content !== 'string') {
-        // eslint-disable-next-line no-console
         console.log(
           '[WARNING]: Received non-string content from OpenAI. This is currently not supported.'
         );
         continue;
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       const generationInfo: Record<string, any> = { ...newTokenIndices };
       if (choice.finish_reason != null) {
         generationInfo.finish_reason = choice.finish_reason;
@@ -1155,7 +1151,7 @@ export class ChatXAI extends OriginalChatXAI {
         baseURL: customBaseURL,
       };
       // Reset the client to force recreation with new config
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       this.client = undefined as any;
     }
   }
@@ -1254,13 +1250,12 @@ export class ChatXAI extends OriginalChatXAI {
         completion: choice.index ?? 0,
       };
       if (typeof chunk.content !== 'string') {
-        // eslint-disable-next-line no-console
         console.log(
           '[WARNING]: Received non-string content from OpenAI. This is currently not supported.'
         );
         continue;
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       const generationInfo: Record<string, any> = { ...newTokenIndices };
       if (choice.finish_reason != null) {
         generationInfo.finish_reason = choice.finish_reason;

@@ -17,10 +17,9 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface RunnableCallableArgs extends Partial<any> {
   name?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   func: (...args: any[]) => any;
   tags?: string[];
   trace?: boolean;
@@ -30,7 +29,6 @@ export interface RunnableCallableArgs extends Partial<any> {
 export class RunnableCallable<I = unknown, O = unknown> extends Runnable<I, O> {
   lc_namespace: string[] = ['langgraph'];
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   func: (...args: any[]) => any;
 
   tags?: string[];
@@ -74,12 +72,9 @@ export class RunnableCallable<I = unknown, O = unknown> extends Runnable<I, O> {
   }
 
   async invoke(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     input: any,
     options?: Partial<RunnableConfig> | undefined
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<any> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let returnValue: any;
 
     if (this.trace) {

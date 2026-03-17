@@ -120,7 +120,7 @@ async function testCodeExecution(): Promise<void> {
 
   conversationHistory.push(humanMessage);
 
-  let inputs = {
+  const inputs = {
     messages: conversationHistory,
   };
   const finalContentParts1 = await run.processStream(inputs, config);

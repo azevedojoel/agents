@@ -14,7 +14,7 @@ export const getCodeBaseURL = (): string =>
   Constants.OFFICIAL_CODE_BASEURL;
 
 const emptyOutputMessage =
-  'stdout: Empty. Ensure you\'re writing output explicitly.\n';
+  "stdout: Empty. Ensure you're writing output explicitly.\n";
 
 const SUPPORTED_LANGUAGES = [
   'py',
@@ -170,7 +170,6 @@ function createCodeExecutionTool(
             postData.files = fileReferences;
           }
         } catch {
-          // eslint-disable-next-line no-console
           console.warn(`Failed to fetch files for session: ${session_id}`);
         }
       }

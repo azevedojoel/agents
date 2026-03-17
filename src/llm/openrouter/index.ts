@@ -48,7 +48,6 @@ export class ChatOpenRouter extends ChatOpenAI {
     return 'LibreChatOpenRouter';
   }
   protected override _convertOpenAIDeltaToBaseMessageChunk(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     delta: Record<string, any>,
     rawResponse: OpenAIClient.ChatCompletionChunk,
     defaultRole?:
@@ -104,9 +103,9 @@ export class ChatOpenRouter extends ChatOpenAI {
     let usage: OpenAIClient.Completions.CompletionUsage | undefined;
 
     // Store reasoning_details keyed by unique identifier to prevent incorrect merging
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const reasoningTextByIndex: Map<number, Record<string, any>> = new Map();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const reasoningEncryptedById: Map<string, Record<string, any>> = new Map();
 
     for await (const data of streamIterable) {
@@ -126,7 +125,7 @@ export class ChatOpenRouter extends ChatOpenAI {
       }
 
       // Accumulate reasoning_details from each delta
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       const deltaAny = delta as Record<string, any>;
       // Extract current chunk's reasoning text for streaming (before accumulation)
       let currentChunkReasoningText = '';
@@ -183,7 +182,7 @@ export class ChatOpenRouter extends ChatOpenAI {
       if (choice.finish_reason != null) {
         // Build properly structured reasoning_details array
         // Text entries first (but we only need the encrypted ones for thought signatures)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
         const finalReasoningDetails: Record<string, any>[] = [
           ...reasoningTextByIndex.values(),
           ...reasoningEncryptedById.values(),
@@ -203,13 +202,12 @@ export class ChatOpenRouter extends ChatOpenAI {
         completion: choice.index ?? 0,
       };
       if (typeof chunk.content !== 'string') {
-        // eslint-disable-next-line no-console
         console.log(
           '[WARNING]: Received non-string content from OpenAI. This is currently not supported.'
         );
         continue;
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       const generationInfo: Record<string, any> = { ...newTokenIndices };
       if (choice.finish_reason != null) {
         generationInfo.finish_reason = choice.finish_reason;

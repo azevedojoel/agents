@@ -20,7 +20,7 @@ const otherMessage = 'File is already downloaded by the user';
 const accessMessage =
   'Note: Files from previous executions are automatically available and can be modified.';
 const emptyOutputMessage =
-  'stdout: Empty. Ensure you\'re writing output explicitly.\n';
+  "stdout: Empty. Ensure you're writing output explicitly.\n";
 
 /** Default max round-trips to prevent infinite loops */
 const DEFAULT_MAX_ROUND_TRIPS = 20;
@@ -224,12 +224,10 @@ export function filterToolsByUsage(
   const usedToolNames = extractUsedToolNames(code, toolNameMap);
 
   if (debug) {
-    // eslint-disable-next-line no-console
     console.log(
       `[PTC Debug] Tool filtering: found ${usedToolNames.size}/${toolDefs.length} tools in code`
     );
     if (usedToolNames.size > 0) {
-      // eslint-disable-next-line no-console
       console.log(
         `[PTC Debug] Matched tools: ${Array.from(usedToolNames).join(', ')}`
       );
@@ -238,7 +236,6 @@ export function filterToolsByUsage(
 
   if (usedToolNames.size === 0) {
     if (debug) {
-      // eslint-disable-next-line no-console
       console.log(
         '[PTC Debug] No tools detected in code - sending all tools as fallback'
       );
@@ -302,7 +299,6 @@ export async function fetchSessionFiles(
       };
     });
   } catch (error) {
-    // eslint-disable-next-line no-console
     console.warn(
       `Failed to fetch files for session: ${sessionId}, ${(error as Error).message}`
     );
@@ -665,7 +661,6 @@ export function createProgrammaticToolCallingTool(
         const effectiveTools = filterToolsByUsage(toolDefs, code, debug);
 
         if (debug) {
-          // eslint-disable-next-line no-console
           console.log(
             `[PTC Debug] Sending ${effectiveTools.length} tools to API ` +
               `(filtered from ${toolDefs.length})`
@@ -713,7 +708,6 @@ export function createProgrammaticToolCallingTool(
           }
 
           if (debug) {
-            // eslint-disable-next-line no-console
             console.log(
               `[PTC Debug] Round trip ${roundTrip}: ${response.tool_calls?.length ?? 0} tool(s) to execute`
             );

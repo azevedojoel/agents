@@ -274,7 +274,7 @@ describe('formatAgentMessages', () => {
         content: [
           {
             type: ContentTypes.TEXT,
-            [ContentTypes.TEXT]: 'I\'ll search for that information.',
+            [ContentTypes.TEXT]: "I'll search for that information.",
             tool_call_ids: ['search_1'],
           },
           {
@@ -289,7 +289,7 @@ describe('formatAgentMessages', () => {
           },
           {
             type: ContentTypes.TEXT,
-            [ContentTypes.TEXT]: 'Now, I\'ll convert the temperature.',
+            [ContentTypes.TEXT]: "Now, I'll convert the temperature.",
             tool_call_ids: ['convert_1'],
           },
           {
@@ -303,7 +303,7 @@ describe('formatAgentMessages', () => {
           },
           {
             type: ContentTypes.TEXT,
-            [ContentTypes.TEXT]: 'Here\'s your answer.',
+            [ContentTypes.TEXT]: "Here's your answer.",
           },
         ],
       },
@@ -320,7 +320,7 @@ describe('formatAgentMessages', () => {
 
     // Check first AIMessage
     expect(result.messages[0].content).toBe(
-      'I\'ll search for that information.'
+      "I'll search for that information."
     );
     expect((result.messages[0] as AIMessage).tool_calls).toHaveLength(1);
     expect((result.messages[0] as AIMessage).tool_calls?.[0]).toEqual({
@@ -338,7 +338,7 @@ describe('formatAgentMessages', () => {
 
     // Check second AIMessage
     expect(result.messages[2].content).toBe(
-      'Now, I\'ll convert the temperature.'
+      "Now, I'll convert the temperature."
     );
     expect((result.messages[2] as AIMessage).tool_calls).toHaveLength(1);
     expect((result.messages[2] as AIMessage).tool_calls?.[0]).toEqual({
@@ -354,7 +354,7 @@ describe('formatAgentMessages', () => {
 
     // Check final AIMessage
     expect(result.messages[4].content).toStrictEqual([
-      { [ContentTypes.TEXT]: 'Here\'s your answer.', type: ContentTypes.TEXT },
+      { [ContentTypes.TEXT]: "Here's your answer.", type: ContentTypes.TEXT },
     ]);
   });
 
@@ -370,7 +370,7 @@ describe('formatAgentMessages', () => {
         content: [
           {
             type: ContentTypes.TEXT,
-            [ContentTypes.TEXT]: 'I\'ll search for tools first.',
+            [ContentTypes.TEXT]: "I'll search for tools first.",
             tool_call_ids: ['ts_1'],
           },
           {
@@ -431,7 +431,7 @@ describe('formatAgentMessages', () => {
         content: [
           {
             type: ContentTypes.TEXT,
-            [ContentTypes.TEXT]: 'I\'ll call an unknown tool.',
+            [ContentTypes.TEXT]: "I'll call an unknown tool.",
             tool_call_ids: ['uk_1'],
           },
           {
@@ -745,7 +745,7 @@ describe('formatAgentMessages', () => {
           },
         ],
       },
-      { role: 'user', content: 'What\'s the weather?' },
+      { role: 'user', content: "What's the weather?" },
       {
         role: 'assistant',
         content: [
@@ -770,7 +770,7 @@ describe('formatAgentMessages', () => {
         content: [
           {
             type: ContentTypes.TEXT,
-            [ContentTypes.TEXT]: 'Here\'s the weather information.',
+            [ContentTypes.TEXT]: "Here's the weather information.",
           },
         ],
       },
@@ -796,13 +796,13 @@ describe('formatAgentMessages', () => {
       { [ContentTypes.TEXT]: 'How can I help you?', type: ContentTypes.TEXT },
     ]);
     expect(result.messages[2].content).toStrictEqual([
-      { [ContentTypes.TEXT]: 'What\'s the weather?', type: ContentTypes.TEXT },
+      { [ContentTypes.TEXT]: "What's the weather?", type: ContentTypes.TEXT },
     ]);
     expect(result.messages[3].content).toBe('Let me check that for you.');
     expect(result.messages[4].content).toBe('Sunny, 75°F');
     expect(result.messages[5].content).toStrictEqual([
       {
-        [ContentTypes.TEXT]: 'Here\'s the weather information.',
+        [ContentTypes.TEXT]: "Here's the weather information.",
         type: ContentTypes.TEXT,
       },
     ]);
@@ -936,7 +936,7 @@ describe('formatAgentMessages', () => {
 
   it('should handle complex message transformations with indexTokenCountMap', () => {
     const payload = [
-      { role: 'user', content: 'What\'s the weather?' },
+      { role: 'user', content: "What's the weather?" },
       {
         role: 'assistant',
         content: [
@@ -1109,7 +1109,7 @@ describe('formatAgentMessages', () => {
         content: [
           {
             type: ContentTypes.TEXT,
-            [ContentTypes.TEXT]: 'I\'ll help you with that.',
+            [ContentTypes.TEXT]: "I'll help you with that.",
             tool_call_ids: ['tool_1'],
           },
           {
@@ -1159,7 +1159,7 @@ describe('formatAgentMessages', () => {
         content: [
           {
             type: ContentTypes.TEXT,
-            [ContentTypes.TEXT]: 'I\'ll perform multiple operations for you.',
+            [ContentTypes.TEXT]: "I'll perform multiple operations for you.",
             tool_call_ids: ['tool_1', 'tool_2', 'tool_3', 'tool_4', 'tool_5'],
           },
           {
@@ -1227,7 +1227,7 @@ describe('formatAgentMessages', () => {
 
     // Check AIMessage has all 5 tool calls
     expect(result.messages[0].content).toBe(
-      'I\'ll perform multiple operations for you.'
+      "I'll perform multiple operations for you."
     );
     expect((result.messages[0] as AIMessage).tool_calls).toHaveLength(5);
 
@@ -1294,7 +1294,7 @@ describe('formatAgentMessages', () => {
           {
             type: ContentTypes.THINK,
             [ContentTypes.THINK]:
-              'I\'ll add this agreement as an observation to our existing troubleshooting task in the project memory system.',
+              "I'll add this agreement as an observation to our existing troubleshooting task in the project memory system.",
           },
           {
             type: ContentTypes.TOOL_CALL,
@@ -1344,7 +1344,7 @@ describe('formatAgentMessages', () => {
     // The final AIMessage should contain the text response
     expect(typeof result.messages[2].content).toBe('string');
     expect((result.messages[2].content as string).trim()).toContain(
-      'I\'ve successfully added our agreement to the project memory system'
+      "I've successfully added our agreement to the project memory system"
     );
   });
 

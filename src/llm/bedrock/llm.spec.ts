@@ -1,5 +1,3 @@
-/* eslint-disable no-process-env */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { config } from 'dotenv';
 config();
 import { expect, test, describe, jest } from '@jest/globals';

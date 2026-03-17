@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 // src/tools/handlers.ts
 import { nanoid } from 'nanoid';
 import { ToolMessage } from '@langchain/core/messages';
@@ -290,8 +289,8 @@ export async function handleServerToolResult({
     const toolCall =
       runStep.stepDetails.type === StepTypes.TOOL_CALLS
         ? (runStep.stepDetails.tool_calls?.find(
-          (toolCall) => toolCall.id === toolUseId
-        ) as ToolCall)
+            (toolCall) => toolCall.id === toolUseId
+          ) as ToolCall)
         : undefined;
 
     if (!toolCall) {

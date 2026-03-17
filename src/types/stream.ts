@@ -311,7 +311,7 @@ export type ToolCallPart = {
   /** The name of the tool to be called */
   name?: string;
   /** The arguments to the tool call */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   args?: string | Record<string, any>;
 
   /** If provided, an identifier associated with the tool call */
@@ -350,11 +350,9 @@ export type MessageContentComplex = (
   | ReasoningContentText
   | MessageContentText
   | MessageContentImageUrl
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   | (Record<string, any> & {
       type?: 'text' | 'image_url' | 'think' | 'thinking' | string;
     })
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   | (Record<string, any> & {
       type?: never;
     })

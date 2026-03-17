@@ -89,10 +89,10 @@ function processTools(tools: GoogleGenerativeAIToolType[]): GenerativeAITool[] {
     ...genAITools,
     ...(functionDeclarationTools.length > 0
       ? [
-        {
-          functionDeclarations: functionDeclarationTools,
-        },
-      ]
+          {
+            functionDeclarations: functionDeclarationTools,
+          },
+        ]
       : []),
   ];
 }

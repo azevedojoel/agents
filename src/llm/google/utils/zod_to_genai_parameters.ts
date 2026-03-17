@@ -22,7 +22,6 @@ export interface GenerativeAIJsonSchemaDirty extends GenerativeAIJsonSchema {
 }
 
 export function removeAdditionalProperties(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   obj: Record<string, any>
 ): GenerativeAIJsonSchema {
   if (typeof obj === 'object' && obj !== null) {
@@ -55,7 +54,6 @@ export function removeAdditionalProperties(
 }
 
 export function schemaToGenerativeAIParameters<
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   RunOutput extends Record<string, any> = Record<string, any>,
 >(
   schema: InteropZodType<RunOutput> | JsonSchema7Type
@@ -71,7 +69,6 @@ export function schemaToGenerativeAIParameters<
 }
 
 export function jsonSchemaToGeminiParameters(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   schema: Record<string, any>
 ): GenerativeAIFunctionDeclarationSchema {
   // Gemini doesn't accept either the $schema or additionalProperties

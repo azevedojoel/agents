@@ -35,14 +35,14 @@ export function _makeMessageChunkFromAnthropicEvent(
   if (data.type === 'message_start') {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { content, usage, ...additionalKwargs } = data.message;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const filteredAdditionalKwargs: Record<string, any> = {};
     for (const [key, value] of Object.entries(additionalKwargs)) {
       if (value !== undefined && value !== null) {
         filteredAdditionalKwargs[key] = value;
       }
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const { input_tokens, output_tokens, ...rest }: Record<string, any> =
       usage ?? {};
     const usageMetadata: UsageMetadata = {
@@ -73,9 +73,8 @@ export function _makeMessageChunkFromAnthropicEvent(
       output_tokens: data.usage.output_tokens,
       total_tokens: data.usage.output_tokens,
       input_token_details: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         cache_creation: (data.usage as any).cache_creation_input_tokens,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
         cache_read: (data.usage as any).cache_read_input_tokens,
       },
     };
@@ -124,16 +123,16 @@ export function _makeMessageChunkFromAnthropicEvent(
         content: fields.coerceContentToString
           ? ''
           : [
-            {
-              index: data.index,
-              ...data.content_block,
-              input:
+              {
+                index: data.index,
+                ...data.content_block,
+                input:
                   contentBlock.type === 'server_tool_use' ||
                   contentBlock.type === 'tool_use'
                     ? ''
                     : undefined,
-            },
-          ],
+              },
+            ],
         additional_kwargs: {},
         tool_call_chunks: toolCallChunks,
       }),
@@ -154,7 +153,6 @@ export function _makeMessageChunkFromAnthropicEvent(
         }),
       };
     } else {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const contentBlock: Record<string, any> = data.delta;
       if ('citation' in contentBlock) {
         contentBlock.citations = [contentBlock.citation];
@@ -186,12 +184,12 @@ export function _makeMessageChunkFromAnthropicEvent(
         content: fields.coerceContentToString
           ? ''
           : [
-            {
-              index: data.index,
-              input: data.delta.partial_json,
-              type: data.delta.type,
-            },
-          ],
+              {
+                index: data.index,
+                input: data.delta.partial_json,
+                type: data.delta.type,
+              },
+            ],
         additional_kwargs: {},
         tool_call_chunks: [
           {
@@ -212,11 +210,11 @@ export function _makeMessageChunkFromAnthropicEvent(
           content: fields.coerceContentToString
             ? content
             : [
-              {
-                index: data.index,
-                ...data.content_block,
-              },
-            ],
+                {
+                  index: data.index,
+                  ...data.content_block,
+                },
+              ],
           additional_kwargs: {},
         }),
       };
@@ -264,12 +262,12 @@ export function _makeMessageChunkFromAnthropicEvent(
         content: fields.coerceContentToString
           ? ''
           : [
-            {
-              index: data.index,
-              ...data.delta,
-              type: 'compaction',
-            },
-          ],
+              {
+                index: data.index,
+                ...data.delta,
+                type: 'compaction',
+              },
+            ],
       }),
     };
   }
@@ -285,14 +283,14 @@ export function anthropicResponseToChatMessages(
   const usageMetadata =
     usage != null
       ? {
-        input_tokens: usage.input_tokens ?? 0,
-        output_tokens: usage.output_tokens ?? 0,
-        total_tokens: (usage.input_tokens ?? 0) + (usage.output_tokens ?? 0),
-        input_token_details: {
-          cache_creation: usage.cache_creation_input_tokens,
-          cache_read: usage.cache_read_input_tokens,
-        },
-      }
+          input_tokens: usage.input_tokens ?? 0,
+          output_tokens: usage.output_tokens ?? 0,
+          total_tokens: (usage.input_tokens ?? 0) + (usage.output_tokens ?? 0),
+          input_token_details: {
+            cache_creation: usage.cache_creation_input_tokens,
+            cache_read: usage.cache_read_input_tokens,
+          },
+        }
       : undefined;
   if (messages.length === 1 && messages[0].type === 'text') {
     return [
@@ -313,7 +311,6 @@ export function anthropicResponseToChatMessages(
       {
         text: '',
         message: new AIMessage({
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           content: messages as any,
           additional_kwargs: additionalKwargs,
           tool_calls: toolCalls,

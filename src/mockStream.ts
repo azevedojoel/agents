@@ -1,4 +1,3 @@
-
 // import { nanoid } from 'nanoid';
 import type OpenAITypes from 'openai';
 import type * as t from '@/types';
@@ -6,24 +5,32 @@ import type * as t from '@/types';
 // import { GraphEvents } from '@/common';
 import { sleep } from '@/utils';
 
-const choiceProps: OpenAITypes.Chat.Completions.ChatCompletionChunk.Choice = { finish_reason: null, index: 0, delta: {} };
+const choiceProps: OpenAITypes.Chat.Completions.ChatCompletionChunk.Choice = {
+  finish_reason: null,
+  index: 0,
+  delta: {},
+};
 const reasoningSplitRegex = /(?<=\s+)|(?=\s+)/;
 const contentSplitRegex = /(?<=<\/?think>)|(?=<\/?think>)|(?<=\s+)|(?=\s+)/;
-export const createMockStream = (options: {
-  text?: string;
-  reasoningText?: string;
-  streamRate?: number;
-  reasoningKey?: 'reasoning' | 'reasoning_content';
-} = {}) => {
+export const createMockStream = (
+  options: {
+    text?: string;
+    reasoningText?: string;
+    streamRate?: number;
+    reasoningKey?: 'reasoning' | 'reasoning_content';
+  } = {}
+) => {
   const {
     text,
     reasoningText,
     streamRate = 25,
-    reasoningKey = 'reasoning_content'
+    reasoningKey = 'reasoning_content',
   } = options;
 
   return async function* mockOpenAIStream(): AsyncGenerator<t.CustomChunk> {
-    const content = text ?? `Here's a sample message that includes code:
+    const content =
+      text ??
+      `Here's a sample message that includes code:
 \`\`\`python
 def hello_world():
     print("Hello, World!")
@@ -45,12 +52,14 @@ And finally some more regular text to test our splitting logic.`;
       const reasoningTokens = reasoningText.split(reasoningSplitRegex);
       for (const token of reasoningTokens) {
         yield {
-          choices: [{
-            ...choiceProps,
-            delta: {
-              [reasoningKey]: token,
+          choices: [
+            {
+              ...choiceProps,
+              delta: {
+                [reasoningKey]: token,
+              },
             },
-          }]
+          ],
         };
         await sleep(streamRate);
       }
@@ -60,12 +69,14 @@ And finally some more regular text to test our splitting logic.`;
     const tokens = content.split(contentSplitRegex);
     for (const token of tokens) {
       yield {
-        choices: [{
-          ...choiceProps,
-          delta: {
-            content: token
-          }
-        }]
+        choices: [
+          {
+            ...choiceProps,
+            delta: {
+              content: token,
+            },
+          },
+        ],
       };
       await sleep(streamRate);
     }

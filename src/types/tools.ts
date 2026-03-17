@@ -8,7 +8,7 @@ import { EnvVar } from '@/common';
 /** Replacement type for `import type { ToolCall } from '@langchain/core/messages/tool'` in order to have stringified args typed */
 export type CustomToolCall = {
   name: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   args: string | Record<string, any>;
   id?: string;
   type?: 'tool_call';
@@ -266,7 +266,7 @@ export type PTCToolCall = {
   /** Tool name */
   name: string;
   /** Input parameters */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   input: Record<string, any>;
 };
 
@@ -277,7 +277,7 @@ export type PTCToolResult = {
   /** Matches PTCToolCall.id */
   call_id: string;
   /** Tool execution result (any JSON-serializable value) */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   result: any;
   /** Whether tool execution failed */
   is_error: boolean;

@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 import type * as t from './types';
 
 /**

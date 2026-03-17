@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/explicit-function-return-type */
-/* eslint-disable no-console */
 import { nanoid } from 'nanoid';
 /**
  * This util file contains functions for converting LangChain messages to Anthropic messages.
@@ -606,7 +604,6 @@ function _formatContent(message: BaseMessage) {
         return {
           ...contentPartCopy,
           ...(cacheControl ? { cache_control: cacheControl } : {}),
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any;
       } else if (
         'functionCall' in contentPart &&

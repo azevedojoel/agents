@@ -49,7 +49,9 @@ export class JinaReranker extends BaseReranker {
     documents: string[],
     topK: number = 5
   ): Promise<t.Highlight[]> {
-    this.logger.debug(`Reranking ${documents.length} chunks with Jina using API URL: ${this.apiUrl}`);
+    this.logger.debug(
+      `Reranking ${documents.length} chunks with Jina using API URL: ${this.apiUrl}`
+    );
 
     try {
       if (this.apiKey == null || this.apiKey === '') {
@@ -216,23 +218,31 @@ export const createReranker = (config: {
   const defaultLogger = logger || createDefaultLogger();
 
   switch (rerankerType.toLowerCase()) {
-  case 'jina':
-    return new JinaReranker({ apiKey: jinaApiKey, apiUrl: jinaApiUrl, logger: defaultLogger });
-  case 'cohere':
-    return new CohereReranker({
-      apiKey: cohereApiKey,
-      logger: defaultLogger,
-    });
-  case 'infinity':
-    return new InfinityReranker(defaultLogger);
-  case 'none':
-    defaultLogger.debug('Skipping reranking as reranker is set to "none"');
-    return undefined;
-  default:
-    defaultLogger.warn(
-      `Unknown reranker type: ${rerankerType}. Defaulting to InfinityReranker.`
-    );
-    return new JinaReranker({ apiKey: jinaApiKey, apiUrl: jinaApiUrl, logger: defaultLogger });
+    case 'jina':
+      return new JinaReranker({
+        apiKey: jinaApiKey,
+        apiUrl: jinaApiUrl,
+        logger: defaultLogger,
+      });
+    case 'cohere':
+      return new CohereReranker({
+        apiKey: cohereApiKey,
+        logger: defaultLogger,
+      });
+    case 'infinity':
+      return new InfinityReranker(defaultLogger);
+    case 'none':
+      defaultLogger.debug('Skipping reranking as reranker is set to "none"');
+      return undefined;
+    default:
+      defaultLogger.warn(
+        `Unknown reranker type: ${rerankerType}. Defaulting to InfinityReranker.`
+      );
+      return new JinaReranker({
+        apiKey: jinaApiKey,
+        apiUrl: jinaApiUrl,
+        logger: defaultLogger,
+      });
   }
 };
 

@@ -5,12 +5,15 @@ describe('shiftIndexTokenCountMap', () => {
     const originalMap: Record<number, number> = {
       0: 10,
       1: 20,
-      2: 30
+      2: 30,
     };
 
     const systemMessageTokenCount = 15;
 
-    const result = shiftIndexTokenCountMap(originalMap, systemMessageTokenCount);
+    const result = shiftIndexTokenCountMap(
+      originalMap,
+      systemMessageTokenCount
+    );
 
     // Check that the system message token count is at index 0
     expect(result[0]).toBe(15);
@@ -41,12 +44,15 @@ describe('shiftIndexTokenCountMap', () => {
     const nonSequentialMap: Record<number, number> = {
       0: 10,
       2: 20,
-      5: 30
+      5: 30,
     };
 
     const systemMessageTokenCount = 15;
 
-    const result = shiftIndexTokenCountMap(nonSequentialMap, systemMessageTokenCount);
+    const result = shiftIndexTokenCountMap(
+      nonSequentialMap,
+      systemMessageTokenCount
+    );
 
     // Check that the system message token count is at index 0
     expect(result[0]).toBe(15);
@@ -62,13 +68,16 @@ describe('shiftIndexTokenCountMap', () => {
     const mapWithStringKeys: Record<string, number> = {
       '0': 10,
       '1': 20,
-      '2': 30
+      '2': 30,
     };
 
     const systemMessageTokenCount = 15;
 
     // Cast to Record<number, number> to match the function signature
-    const result = shiftIndexTokenCountMap(mapWithStringKeys as unknown as Record<number, number>, systemMessageTokenCount);
+    const result = shiftIndexTokenCountMap(
+      mapWithStringKeys as unknown as Record<number, number>,
+      systemMessageTokenCount
+    );
 
     // Check that the system message token count is at index 0
     expect(result[0]).toBe(15);

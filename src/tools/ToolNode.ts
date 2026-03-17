@@ -30,7 +30,6 @@ function isSend(value: unknown): value is Send {
   return value instanceof Send;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export class ToolNode<T = any> extends RunnableCallable<T, T> {
   private toolMap: Map<string, StructuredToolInterface | RunnableToolLike>;
   private loadRuntimeTools?: t.ToolRefGenerator;
@@ -262,7 +261,6 @@ export class ToolNode<T = any> extends RunnableCallable<T, T> {
             config.metadata
           );
         } catch (handlerError) {
-          // eslint-disable-next-line no-console
           console.error('Error in errorHandler:', {
             toolName: call.name,
             toolCallId: call.id,
@@ -276,13 +274,13 @@ export class ToolNode<T = any> extends RunnableCallable<T, T> {
             handlerError:
               handlerError instanceof Error
                 ? {
-                  message: handlerError.message,
-                  stack: handlerError.stack ?? undefined,
-                }
+                    message: handlerError.message,
+                    stack: handlerError.stack ?? undefined,
+                  }
                 : {
-                  message: String(handlerError),
-                  stack: undefined,
-                },
+                    message: String(handlerError),
+                    stack: undefined,
+                  },
           });
         }
       }
@@ -514,14 +512,13 @@ export class ToolNode<T = any> extends RunnableCallable<T, T> {
   private async executeViaEvent(
     toolCalls: ToolCall[],
     config: RunnableConfig,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     input: any
   ): Promise<T> {
     const outputs = await this.dispatchToolEvents(toolCalls, config);
     return (Array.isArray(input) ? outputs : { messages: outputs }) as T;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   protected async run(input: any, config: RunnableConfig): Promise<T> {
     let outputs: (BaseMessage | Command)[];
 
@@ -614,8 +611,8 @@ export class ToolNode<T = any> extends RunnableCallable<T, T> {
         const directOutputs: (BaseMessage | Command)[] =
           directCalls.length > 0
             ? await Promise.all(
-              directCalls.map((call) => this.runTool(call, config))
-            )
+                directCalls.map((call) => this.runTool(call, config))
+              )
             : [];
 
         for (let i = 0; i < directCalls.length; i++) {

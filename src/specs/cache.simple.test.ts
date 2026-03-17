@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { config } from 'dotenv';
 config();
 import { Calculator } from '@/tools/Calculator';

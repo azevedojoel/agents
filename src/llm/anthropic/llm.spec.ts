@@ -1,5 +1,3 @@
-/* eslint-disable no-process-env */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { config } from 'dotenv';
 config();
 import { expect, test } from '@jest/globals';
@@ -67,7 +65,7 @@ const pdfModelName = 'claude-3-5-haiku-20241022';
 // Use this model for all other tests
 const modelName = 'claude-3-haiku-20240307';
 
-test('Test ChatAnthropic', async () => {
+test('ChatAnthropic', async () => {
   const chat = new ChatAnthropic({
     modelName,
     maxRetries: 0,
@@ -77,7 +75,7 @@ test('Test ChatAnthropic', async () => {
   expect(res.response_metadata.usage).toBeDefined();
 });
 
-test('Test ChatAnthropic with a bad API key throws appropriate error', async () => {
+test('ChatAnthropic with a bad API key throws appropriate error', async () => {
   const chat = new ChatAnthropic({
     modelName,
     maxRetries: 0,
@@ -94,7 +92,7 @@ test('Test ChatAnthropic with a bad API key throws appropriate error', async () 
   expect((error as any).lc_error_code).toEqual('MODEL_AUTHENTICATION');
 });
 
-test('Test ChatAnthropic with unknown model throws appropriate error', async () => {
+test('ChatAnthropic with unknown model throws appropriate error', async () => {
   const chat = new ChatAnthropic({
     modelName: 'badbad',
     maxRetries: 0,
@@ -110,7 +108,7 @@ test('Test ChatAnthropic with unknown model throws appropriate error', async () 
   expect((error as any).lc_error_code).toEqual('MODEL_NOT_FOUND');
 });
 
-test('Test ChatAnthropic Generate', async () => {
+test('ChatAnthropic Generate', async () => {
   const chat = new ChatAnthropic({
     modelName,
     maxRetries: 0,
@@ -127,7 +125,7 @@ test('Test ChatAnthropic Generate', async () => {
   // console.log({ res });
 });
 
-test.skip('Test ChatAnthropic Generate w/ ClientOptions', async () => {
+test.skip('ChatAnthropic Generate w/ ClientOptions', async () => {
   const chat = new ChatAnthropic({
     modelName,
     maxRetries: 0,
@@ -149,7 +147,7 @@ test.skip('Test ChatAnthropic Generate w/ ClientOptions', async () => {
   // console.log({ res });
 });
 
-test('Test ChatAnthropic Generate with a signal in call options', async () => {
+test('ChatAnthropic Generate with a signal in call options', async () => {
   const chat = new ChatAnthropic({
     modelName,
     maxRetries: 0,
@@ -169,7 +167,7 @@ test('Test ChatAnthropic Generate with a signal in call options', async () => {
   }).rejects.toThrow();
 }, 10000);
 
-test('Test ChatAnthropic tokenUsage with a batch', async () => {
+test('ChatAnthropic tokenUsage with a batch', async () => {
   const model = new ChatAnthropic({
     temperature: 0,
     maxRetries: 0,
@@ -182,7 +180,7 @@ test('Test ChatAnthropic tokenUsage with a batch', async () => {
   // console.log({ res });
 });
 
-test('Test ChatAnthropic in streaming mode', async () => {
+test('ChatAnthropic in streaming mode', async () => {
   let nrNewTokens = 0;
   let streamedCompletion = '';
 
@@ -205,7 +203,7 @@ test('Test ChatAnthropic in streaming mode', async () => {
   expect(res.content).toBe(streamedCompletion);
 });
 
-test('Test ChatAnthropic in streaming mode with a signal', async () => {
+test('ChatAnthropic in streaming mode with a signal', async () => {
   let nrNewTokens = 0;
   let streamedCompletion = '';
 
@@ -237,7 +235,7 @@ test('Test ChatAnthropic in streaming mode with a signal', async () => {
   // console.log({ nrNewTokens, streamedCompletion });
 }, 5000);
 
-test.skip('Test ChatAnthropic prompt value', async () => {
+test.skip('ChatAnthropic prompt value', async () => {
   const chat = new ChatAnthropic({
     modelName,
     maxRetries: 0,
@@ -315,7 +313,7 @@ test.skip('ChatAnthropic, Anthropic apiUrl set manually via constructor', async 
   // console.log({ res });
 });
 
-test('Test ChatAnthropic stream method', async () => {
+test('ChatAnthropic stream method', async () => {
   const model = new ChatAnthropic({
     maxTokens: 50,
     maxRetries: 0,
@@ -329,7 +327,7 @@ test('Test ChatAnthropic stream method', async () => {
   expect(chunks.length).toBeGreaterThan(1);
 });
 
-test('Test ChatAnthropic stream method with abort', async () => {
+test('ChatAnthropic stream method with abort', async () => {
   await expect(async () => {
     const model = new ChatAnthropic({
       maxTokens: 500,
@@ -348,7 +346,7 @@ test('Test ChatAnthropic stream method with abort', async () => {
   }).rejects.toThrow();
 });
 
-test('Test ChatAnthropic stream method with early break', async () => {
+test('ChatAnthropic stream method with early break', async () => {
   const model = new ChatAnthropic({
     maxTokens: 50,
     maxRetries: 0,
@@ -367,7 +365,7 @@ test('Test ChatAnthropic stream method with early break', async () => {
   }
 });
 
-test('Test ChatAnthropic headers passed through', async () => {
+test('ChatAnthropic headers passed through', async () => {
   const chat = new ChatAnthropic({
     modelName,
     maxRetries: 0,
@@ -385,7 +383,7 @@ test('Test ChatAnthropic headers passed through', async () => {
 
 describe('ChatAnthropic image inputs', () => {
   test.each(['invoke', 'stream'])(
-    'Test ChatAnthropic image_url, %s',
+    'ChatAnthropic image_url, %s',
     async (invocationType: string) => {
       const chat = new ChatAnthropic({
         modelName,
@@ -466,7 +464,7 @@ describe('ChatAnthropic image inputs', () => {
   );
 
   test.each(['invoke', 'stream'])(
-    'Test ChatAnthropic Anthropic Image Block, %s',
+    'ChatAnthropic Anthropic Image Block, %s',
     async (invocationType: string) => {
       const chat = new ChatAnthropic({
         modelName,
@@ -913,7 +911,7 @@ test.skip('tool caching', async () => {
   );
 });
 
-test.skip('Test ChatAnthropic with custom client', async () => {
+test.skip('ChatAnthropic with custom client', async () => {
   const client = new AnthropicVertex();
   const chat = new ChatAnthropic({
     modelName,
@@ -1239,7 +1237,7 @@ describe('Citations', () => {
   });
 });
 
-test('Test thinking blocks multiturn invoke', async () => {
+test('thinking blocks multiturn invoke', async () => {
   const model = new ChatAnthropic({
     model: extendedThinkingModelName,
     maxTokens: 5000,
@@ -1277,7 +1275,7 @@ test('Test thinking blocks multiturn invoke', async () => {
   await model.invoke(invokeMessages);
 });
 
-test('Test thinking blocks multiturn streaming', async () => {
+test('thinking blocks multiturn streaming', async () => {
   const model = new ChatAnthropic({
     model: extendedThinkingModelName,
     maxTokens: 5000,
@@ -1318,7 +1316,7 @@ test('Test thinking blocks multiturn streaming', async () => {
   await doStreaming(streamingMessages);
 });
 
-test('Test redacted thinking blocks multiturn invoke', async () => {
+test('redacted thinking blocks multiturn invoke', async () => {
   const model = new ChatAnthropic({
     model: extendedThinkingModelName,
     maxTokens: 5000,
@@ -1355,7 +1353,7 @@ test('Test redacted thinking blocks multiturn invoke', async () => {
   await doInvoke(invokeMessages);
 });
 
-test('Test redacted thinking blocks multiturn streaming', async () => {
+test('redacted thinking blocks multiturn streaming', async () => {
   const model = new ChatAnthropic({
     model: extendedThinkingModelName,
     maxTokens: 5000,

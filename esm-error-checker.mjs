@@ -18,15 +18,21 @@ const tsconfigPath = path.resolve(__dirname, 'tsconfig.json');
 const tsconfig = JSON.parse(fs.readFileSync(tsconfigPath, 'utf8'));
 
 // Create compiler options
-const compilerOptions = ts.convertCompilerOptionsFromJson(tsconfig.compilerOptions, './').options;
+const compilerOptions = ts.convertCompilerOptionsFromJson(
+  tsconfig.compilerOptions,
+  './'
+).options;
 
 // Resolve path aliases
-compilerOptions.baseUrl = path.resolve(__dirname, compilerOptions.baseUrl || '.');
+compilerOptions.baseUrl = path.resolve(
+  __dirname,
+  compilerOptions.baseUrl || '.'
+);
 if (compilerOptions.paths) {
   compilerOptions.paths = Object.fromEntries(
     Object.entries(compilerOptions.paths).map(([key, value]) => [
       key,
-      value.map(p => path.resolve(compilerOptions.baseUrl, p))
+      value.map((p) => path.resolve(compilerOptions.baseUrl, p)),
     ])
   );
 }
@@ -34,7 +40,7 @@ if (compilerOptions.paths) {
 // Get all TypeScript files in the project
 const getAllTypeScriptFiles = (dir) => {
   const files = fs.readdirSync(dir, { withFileTypes: true });
-  return files.flatMap(file => {
+  return files.flatMap((file) => {
     const filePath = path.join(dir, file.name);
     if (file.isDirectory()) {
       return getAllTypeScriptFiles(filePath);
@@ -56,15 +62,22 @@ const diagnostics = ts.getPreEmitDiagnostics(program);
 let output = '';
 
 if (sourceFile) {
-  output += '```ts\n' + sourceFile.getFullText() + '\n```\n\n// TypeScript Errors:\n';
+  output +=
+    '```ts\n' + sourceFile.getFullText() + '\n```\n\n// TypeScript Errors:\n';
 
   if (diagnostics.length === 0) {
     output += 'No TypeScript errors found.\n';
   } else {
     diagnostics.forEach((diagnostic) => {
       if (diagnostic.file === sourceFile) {
-        const { line, character } = ts.getLineAndCharacterOfPosition(diagnostic.file, diagnostic.start);
-        const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
+        const { line, character } = ts.getLineAndCharacterOfPosition(
+          diagnostic.file,
+          diagnostic.start
+        );
+        const message = ts.flattenDiagnosticMessageText(
+          diagnostic.messageText,
+          '\n'
+        );
         const lineContent = sourceFile.text.split('\n')[line];
 
         output += `Line ${line + 1}, Column ${character + 1}: ${message}\n`;
@@ -82,14 +95,16 @@ const runESLint = async () => {
   return formatter.format(results);
 };
 
-runESLint().then(eslintOutput => {
-  output += '\n// ESLint Results:\n' + eslintOutput;
+runESLint()
+  .then((eslintOutput) => {
+    output += '\n// ESLint Results:\n' + eslintOutput;
 
-  console.log(output);
+    console.log(output);
 
-  // Write the output file
-  const outputFile = 'lint_output.txt';
-  fs.writeFileSync(outputFile, output);
-}).catch(error => {
-  console.error('Error running ESLint:', error);
-});
+    // Write the output file
+    const outputFile = 'lint_output.txt';
+    fs.writeFileSync(outputFile, output);
+  })
+  .catch((error) => {
+    console.error('Error running ESLint:', error);
+  });

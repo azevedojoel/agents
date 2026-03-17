@@ -60,9 +60,9 @@ describe('computeRemainingSteps', () => {
       ...Array.from({ length: 102 }, (_, i) =>
         i % 2 === 0
           ? new AIMessage({
-            content: '',
-            tool_calls: [{ id: String(i), name: 'x', args: {} }],
-          })
+              content: '',
+              tool_calls: [{ id: String(i), name: 'x', args: {} }],
+            })
           : new ToolMessage({ content: 'ok', tool_call_id: String(i - 1) })
       ),
     ];

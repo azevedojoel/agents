@@ -230,5 +230,8 @@ export function getPostRunAuditPendingState(messages: BaseMessage[]): {
   return { pending: false };
 }
 
-/** Tool names allowed when post-run audit is required (only run_sub_agent to delegate to Auditor) */
-export const POST_RUN_AUDIT_TOOLS = ['run_sub_agent'] as const;
+/** Tool names allowed when post-run audit is required (delegate_auditor or run_sub_agent to delegate to Auditor) */
+export const POST_RUN_AUDIT_TOOLS = [
+  'delegate_auditor',
+  'run_sub_agent',
+] as const;

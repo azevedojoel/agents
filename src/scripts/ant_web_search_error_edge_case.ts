@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 // src/scripts/ant_web_search_error_edge_case.ts
 import { config } from 'dotenv';
 config();

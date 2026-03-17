@@ -385,7 +385,7 @@ describe('SplitStreamHandler with Reasoning Tokens', () => {
     expect(messageDeltas.length).toBeGreaterThan(0);
 
     // Verify splitting behavior for both types
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const getStepTypes = (calls: any[]): string[] =>
       calls
         .map(([{ data }]) =>
@@ -480,7 +480,7 @@ describe('SplitStreamHandler', () => {
     });
 
     const content =
-      'Here\'s some regular text. <think>Now I\'m thinking deeply about something important. This should all be reasoning.</think> Back to regular text.';
+      "Here's some regular text. <think>Now I'm thinking deeply about something important. This should all be reasoning.</think> Back to regular text.";
 
     const stream = createMockStream({
       text: content,
@@ -496,7 +496,7 @@ describe('SplitStreamHandler', () => {
       messageDeltaEvents.some((event) =>
         (
           event.delta.content?.[0] as t.MessageDeltaUpdate | undefined
-        )?.text.includes('Here\'s')
+        )?.text.includes("Here's")
       )
     ).toBe(true);
 
@@ -606,7 +606,7 @@ describe('SplitStreamHandler', () => {
     });
 
     const content =
-      'Here\'s some regular text. <think>Now I\'m thinking deeply about something important. This is a long thought that should be split into multiple parts. We want to ensure the splitting works correctly.</think> Back to regular text after thinking.';
+      "Here's some regular text. <think>Now I'm thinking deeply about something important. This is a long thought that should be split into multiple parts. We want to ensure the splitting works correctly.</think> Back to regular text after thinking.";
 
     const stream = createMockStream({
       text: content,

@@ -1,6 +1,7 @@
 import {
   AIMessage,
   BaseMessage,
+  ToolMessage,
   UsageMetadata,
 } from '@langchain/core/messages';
 import type {
@@ -18,6 +19,14 @@ export type PruneMessagesFactoryParams = {
   tokenCounter: TokenCounter;
   indexTokenCountMap: Record<string, number | undefined>;
   thinkingEnabled?: boolean;
+  /** When true, condense large tool results before pruning. Default true */
+  condenseToolResults?: boolean;
+  /** Content length threshold for tool condensation. Default 2000 */
+  condenseThreshold?: number;
+  /** Chars to keep when truncating tool content. Default 200 */
+  condenseKeepChars?: number;
+  /** Tool names for planId+summary condensation. When omitted, uses DELEGATION_AUDIT_TOOL_NAMES */
+  condensableToolNames?: Set<string>;
 };
 export type PruneMessagesParams = {
   messages: BaseMessage[];
@@ -41,11 +50,11 @@ function addThinkingBlock(
   const content: MessageContentComplex[] = Array.isArray(message.content)
     ? (message.content as MessageContentComplex[])
     : [
-        {
-          type: ContentTypes.TEXT,
-          text: message.content,
-        },
-      ];
+      {
+        type: ContentTypes.TEXT,
+        text: message.content,
+      },
+    ];
   /** Edge case, the message already has the thinking block */
   if (content[0].type === thinkingBlock.type) {
     return message;
@@ -389,6 +398,343 @@ export function checkValidNumber(value: unknown): value is number {
   return typeof value === 'number' && !isNaN(value) && value > 0;
 }
 
+/** Block types that represent thinking/reasoning and can be stripped from old turns */
+const THINKING_BLOCK_TYPES = new Set([
+  ContentTypes.THINKING,
+  ContentTypes.REASONING_CONTENT,
+  ContentTypes.REASONING,
+  'redacted_thinking',
+]);
+
+function isThinkingBlock(
+  block: MessageContentComplex | string
+): block is MessageContentComplex {
+  return (
+    typeof block === 'object' &&
+    block != null &&
+    'type' in block &&
+    THINKING_BLOCK_TYPES.has((block as { type?: string }).type as string)
+  );
+}
+
+/**
+ * Returns the set of message indices that belong to the "latest turn" — the most
+ * recent contiguous AI+Tool sequence from the end of the messages array.
+ * Stops when a HumanMessage or SystemMessage is encountered.
+ */
+function getLatestTurnIndices(messages: BaseMessage[]): Set<number> {
+  const indices = new Set<number>();
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const type = messages[i]?.getType();
+    if (type === 'human' || type === 'system') {
+      break;
+    }
+    if (type === 'ai' || type === 'tool') {
+      indices.add(i);
+    }
+  }
+  return indices;
+}
+
+/**
+ * Strips thinking/reasoning blocks from AI messages that are NOT in the latest turn.
+ * Only the latest turn's thinking is required by Anthropic/Bedrock APIs.
+ * Returns a copy of messages with stripped content and the set of modified indices.
+ * Does not mutate the input.
+ */
+export function stripOldThinkingBlocks(messages: BaseMessage[]): {
+  messages: BaseMessage[];
+  modifiedIndices: Set<number>;
+} {
+  const latestTurnIndices = getLatestTurnIndices(messages);
+  const modifiedIndices = new Set<number>();
+  const result: BaseMessage[] = [];
+
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+    if (msg.getType() !== 'ai') {
+      result.push(msg);
+      continue;
+    }
+
+    if (latestTurnIndices.has(i)) {
+      result.push(msg);
+      continue;
+    }
+
+    const aiMsg = msg as AIMessage;
+    let modified = false;
+
+    // Strip from content array
+    if (Array.isArray(aiMsg.content)) {
+      const filtered = (aiMsg.content as MessageContentComplex[]).filter(
+        (block) => {
+          if (isThinkingBlock(block)) {
+            modified = true;
+            return false;
+          }
+          return true;
+        }
+      );
+      if (modified) {
+        const newContent =
+          filtered.length > 0
+            ? filtered
+            : [{ type: ContentTypes.TEXT, text: '' }];
+        result.push(
+          new AIMessage({
+            ...aiMsg,
+            content: newContent,
+            additional_kwargs: {
+              ...aiMsg.additional_kwargs,
+              reasoning_content: undefined,
+            },
+          })
+        );
+        modifiedIndices.add(i);
+        continue;
+      }
+    }
+
+    // Strip from additional_kwargs (Bedrock, OpenAI)
+    if (aiMsg.additional_kwargs.reasoning_content != null) {
+      result.push(
+        new AIMessage({
+          ...aiMsg,
+          additional_kwargs: {
+            ...aiMsg.additional_kwargs,
+            reasoning_content: undefined,
+          },
+        })
+      );
+      modifiedIndices.add(i);
+      continue;
+    }
+
+    result.push(msg);
+  }
+
+  return { messages: result, modifiedIndices };
+}
+
+/** Tool names whose results can be condensed to planId + summary (model can fetch via audit_get_plan_delegation_trail or list_subagent_runs) */
+export const DELEGATION_AUDIT_TOOL_NAMES = new Set([
+  'await_subagent_results',
+  'await_architects',
+  'await_coders',
+  'await_auditors',
+  'delegate_auditor',
+  'delegate_coders',
+  'delegate_architects',
+  'run_sub_agent',
+]);
+
+const DELEGATION_HINT =
+  'Call audit_get_plan_delegation_trail(planId) or list_subagent_runs(planId) for full details.';
+
+function condenseDelegationToolResult(content: string): string | null {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(content) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  if (parsed == null || typeof parsed !== 'object') return null;
+
+  const planId =
+    typeof parsed.planId === 'string'
+      ? parsed.planId
+      : typeof parsed.auditPlanId === 'string'
+        ? parsed.auditPlanId
+        : null;
+  const summary =
+    typeof parsed.summary === 'string'
+      ? parsed.summary
+      : typeof parsed.message === 'string'
+        ? parsed.message
+        : '';
+  const allComplete =
+    typeof parsed.allComplete === 'boolean' ? parsed.allComplete : undefined;
+  const success =
+    typeof parsed.success === 'boolean' ? parsed.success : undefined;
+  const error = typeof parsed.error === 'string' ? parsed.error : undefined;
+
+  const condensed: Record<string, unknown> = {
+    _condensed: true,
+    _hint: DELEGATION_HINT,
+  };
+  if (planId != null) condensed.planId = planId;
+  if (summary) condensed.summary = summary;
+  if (allComplete != null) condensed.allComplete = allComplete;
+  if (success != null) condensed.success = success;
+  if (error != null) condensed.error = error;
+
+  if (planId == null && error == null && !summary && allComplete == null)
+    return null;
+  return JSON.stringify(condensed);
+}
+
+const SYS_ADMIN_LIST_KEYS = [
+  'users',
+  'agents',
+  'tools',
+  'workspaces',
+  'results',
+];
+
+function condenseSysAdminToolResult(
+  content: string,
+  toolName: string
+): string | null {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(content) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  if (parsed == null || typeof parsed !== 'object') return null;
+
+  const hint = `Call ${toolName} again for full details.`;
+
+  if (typeof parsed.error === 'string') {
+    return JSON.stringify({
+      error: parsed.error,
+      _condensed: true,
+    });
+  }
+
+  const id =
+    typeof parsed.id === 'string'
+      ? parsed.id
+      : typeof parsed._id === 'string'
+        ? parsed._id
+        : null;
+  const name = typeof parsed.name === 'string' ? parsed.name : undefined;
+  if (id != null) {
+    return JSON.stringify({
+      id,
+      ...(name != null && { name }),
+      _condensed: true,
+      _hint: hint,
+    });
+  }
+
+  for (const key of SYS_ADMIN_LIST_KEYS) {
+    const arr = parsed[key];
+    if (Array.isArray(arr)) {
+      const total =
+        typeof parsed.total === 'number' ? parsed.total : arr.length;
+      return JSON.stringify({
+        count: arr.length,
+        total,
+        _condensed: true,
+        _hint: hint,
+      });
+    }
+  }
+
+  const message =
+    typeof parsed.message === 'string' ? parsed.message : undefined;
+  const success =
+    typeof parsed.success === 'boolean' ? parsed.success : undefined;
+  const successId =
+    typeof parsed.id === 'string'
+      ? parsed.id
+      : typeof parsed._id === 'string'
+        ? parsed._id
+        : null;
+  if (message != null || success != null) {
+    return JSON.stringify({
+      ...(success != null && { success }),
+      ...(message != null && { message }),
+      ...(successId != null && { id: successId }),
+      _condensed: true,
+    });
+  }
+
+  return null;
+}
+
+export type CondenseToolResultsOptions = {
+  /** Content length threshold in chars; messages above this are truncated. Default 2000 */
+  threshold?: number;
+  /** Chars to keep at the start when truncating. Default 200 */
+  keepChars?: number;
+  /** Tool names for planId+summary condensation. When omitted, uses DELEGATION_AUDIT_TOOL_NAMES */
+  condensableToolNames?: Set<string>;
+};
+
+const DEFAULT_CONDENSE_THRESHOLD = 2000;
+const DEFAULT_CONDENSE_KEEP_CHARS = 200;
+
+/**
+ * Condenses large ToolMessage content by truncating to a summary.
+ * For delegation/audit tools, replaces full payload with planId + summary (model can fetch via audit_get_plan_delegation_trail).
+ * Preserves artifact (not sent to model). Does not mutate input.
+ */
+export function condenseToolResults(
+  messages: BaseMessage[],
+  options: CondenseToolResultsOptions = {}
+): { messages: BaseMessage[]; modifiedIndices: Set<number> } {
+  const threshold = options.threshold ?? DEFAULT_CONDENSE_THRESHOLD;
+  const keepChars = options.keepChars ?? DEFAULT_CONDENSE_KEEP_CHARS;
+  const condensableNames =
+    options.condensableToolNames ?? DELEGATION_AUDIT_TOOL_NAMES;
+  const modifiedIndices = new Set<number>();
+  const result: BaseMessage[] = [];
+
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+    if (msg.getType() !== 'tool') {
+      result.push(msg);
+      continue;
+    }
+
+    const toolMsg = msg as ToolMessage;
+    const toolName = typeof toolMsg.name === 'string' ? toolMsg.name : '';
+    const content =
+      typeof toolMsg.content === 'string'
+        ? toolMsg.content
+        : Array.isArray(toolMsg.content)
+          ? (toolMsg.content as Array<{ text?: string }>)
+            .map((c) =>
+              typeof c === 'object' && c.text ? c.text : String(c)
+            )
+            .join('')
+          : String(toolMsg.content ?? '');
+
+    if (content.length <= threshold) {
+      result.push(msg);
+      continue;
+    }
+
+    const sizeFallback =
+      content.slice(0, keepChars) +
+      `\n...[truncated, ${content.length} total chars]`;
+
+    let newContent: string;
+    if (condensableNames.has(toolName)) {
+      const condensed = condenseDelegationToolResult(content);
+      newContent = condensed ?? sizeFallback;
+    } else if (toolName.startsWith('sys_admin_')) {
+      const condensed = condenseSysAdminToolResult(content, toolName);
+      newContent = condensed ?? sizeFallback;
+    } else {
+      newContent = sizeFallback;
+    }
+
+    result.push(
+      new ToolMessage({
+        ...toolMsg,
+        content: newContent,
+      })
+    );
+    modifiedIndices.add(i);
+  }
+
+  return { messages: result, modifiedIndices };
+}
+
 type ThinkingBlocks = {
   thinking_blocks?: Array<{
     type: 'thinking';
@@ -453,6 +799,35 @@ export function createPruneMessages(factoryParams: PruneMessagesFactoryParams) {
       }
     }
 
+    // Strip old thinking blocks (keep only latest turn's) to reduce context waste.
+    // Works on a copy; does not mutate state.messages.
+    let messagesToUse = params.messages;
+    if (factoryParams.thinkingEnabled === true) {
+      const { messages: stripped, modifiedIndices } = stripOldThinkingBlocks(
+        params.messages
+      );
+      messagesToUse = stripped;
+      for (const idx of modifiedIndices) {
+        delete indexTokenCountMap[idx];
+      }
+    }
+
+    // Condense large tool results before pruning.
+    if (factoryParams.condenseToolResults !== false) {
+      const { messages: condensed, modifiedIndices } = condenseToolResults(
+        messagesToUse,
+        {
+          threshold: factoryParams.condenseThreshold,
+          keepChars: factoryParams.condenseKeepChars,
+          condensableToolNames: factoryParams.condensableToolNames,
+        }
+      );
+      messagesToUse = condensed;
+      for (const idx of modifiedIndices) {
+        delete indexTokenCountMap[idx];
+      }
+    }
+
     let currentUsage: UsageMetadata | undefined;
     if (
       params.usageMetadata &&
@@ -471,8 +846,8 @@ export function createPruneMessages(factoryParams: PruneMessagesFactoryParams) {
     }
 
     const newOutputs = new Set<number>();
-    for (let i = lastTurnStartIndex; i < params.messages.length; i++) {
-      const message = params.messages[i];
+    for (let i = lastTurnStartIndex; i < messagesToUse.length; i++) {
+      const message = messagesToUse[i];
       if (
         i === lastTurnStartIndex &&
         indexTokenCountMap[i] === undefined &&
@@ -494,11 +869,11 @@ export function createPruneMessages(factoryParams: PruneMessagesFactoryParams) {
     // EDGE CASE: when the resulting context gets pruned, we should not distribute the usage for messages that are not in the context.
     if (currentUsage) {
       let totalIndexTokens = 0;
-      if (params.messages[0].getType() === 'system') {
+      if (messagesToUse[0].getType() === 'system') {
         totalIndexTokens += indexTokenCountMap[0] ?? 0;
       }
-      for (let i = lastCutOffIndex; i < params.messages.length; i++) {
-        if (i === 0 && params.messages[0].getType() === 'system') {
+      for (let i = lastCutOffIndex; i < messagesToUse.length; i++) {
+        if (i === 0 && messagesToUse[0].getType() === 'system') {
           continue;
         }
         if (newOutputs.has(i)) {
@@ -513,16 +888,13 @@ export function createPruneMessages(factoryParams: PruneMessagesFactoryParams) {
 
       // Apply the ratio adjustment only to messages at or after lastCutOffIndex, and only if the ratio is safe
       if (isRatioSafe) {
-        if (
-          params.messages[0].getType() === 'system' &&
-          lastCutOffIndex !== 0
-        ) {
+        if (messagesToUse[0].getType() === 'system' && lastCutOffIndex !== 0) {
           indexTokenCountMap[0] = Math.round(
             (indexTokenCountMap[0] ?? 0) * ratio
           );
         }
 
-        for (let i = lastCutOffIndex; i < params.messages.length; i++) {
+        for (let i = lastCutOffIndex; i < messagesToUse.length; i++) {
           if (newOutputs.has(i)) {
             continue;
           }
@@ -533,14 +905,14 @@ export function createPruneMessages(factoryParams: PruneMessagesFactoryParams) {
       }
     }
 
-    lastTurnStartIndex = params.messages.length;
+    lastTurnStartIndex = messagesToUse.length;
     if (lastCutOffIndex === 0 && totalTokens <= factoryParams.maxTokens) {
-      return { context: params.messages, indexTokenCountMap };
+      return { context: messagesToUse, indexTokenCountMap };
     }
 
     const { context, thinkingStartIndex } = getMessagesWithinTokenLimit({
       maxContextTokens: factoryParams.maxTokens,
-      messages: params.messages,
+      messages: messagesToUse,
       indexTokenCountMap,
       startType: params.startType,
       thinkingEnabled: factoryParams.thinkingEnabled,
@@ -555,9 +927,9 @@ export function createPruneMessages(factoryParams: PruneMessagesFactoryParams) {
           : undefined,
     });
     runThinkingStartIndex = thinkingStartIndex ?? -1;
-    /** The index is the first value of `context`, index relative to `params.messages` */
+    /** The index is the first value of `context`, index relative to `messagesToUse` */
     lastCutOffIndex = Math.max(
-      params.messages.length -
+      messagesToUse.length -
         (context.length - (context[0]?.getType() === 'system' ? 1 : 0)),
       0
     );

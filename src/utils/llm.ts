@@ -2,7 +2,7 @@
 import { Providers } from '@/common';
 import type { ClientOptions } from '@/types';
 
-/** Providers that support parallel_tool_calls: false (OpenAI-compatible API) */
+/** OpenAI Chat Completions–compatible providers (tool_choice / required) */
 const OPENAI_LIKE_PROVIDERS = [
   Providers.OPENAI,
   Providers.AZURE,
@@ -12,21 +12,13 @@ const OPENAI_LIKE_PROVIDERS = [
   Providers.MOONSHOT,
 ] as const;
 
-/** Options to pass to bindTools to disable parallel tool calls (one tool per turn) */
+/**
+ * Extra options for LangChain `bindTools`. Empty so providers may emit multiple
+ * tool calls in one assistant turn when the API supports it.
+ */
 export function getParallelToolCallDisableOptions(
-  provider?: string | Providers
+  _provider?: string | Providers
 ): Record<string, unknown> {
-  if (provider == null) return {};
-  if (
-    OPENAI_LIKE_PROVIDERS.includes(
-      provider as (typeof OPENAI_LIKE_PROVIDERS)[number]
-    )
-  ) {
-    return { parallel_tool_calls: false };
-  }
-  if (provider === Providers.ANTHROPIC || provider === Providers.BEDROCK) {
-    return { tool_choice: { type: 'auto', disable_parallel_tool_use: true } };
-  }
   return {};
 }
 
@@ -43,7 +35,7 @@ export function getRequiredToolChoice(
     return 'required';
   }
   if (provider === Providers.ANTHROPIC || provider === Providers.BEDROCK) {
-    return { type: 'any', disable_parallel_tool_use: true };
+    return { type: 'any' };
   }
   if (provider === Providers.GOOGLE || provider === Providers.VERTEXAI) {
     return 'any';

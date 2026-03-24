@@ -198,7 +198,7 @@ export function buildPythonToolBindings(toolDefs: { name: string }[]): {
   const originalToPython = new Map<string, string>();
   const used = new Set<string>();
   for (const tool of toolDefs) {
-    let base = normalizeToPythonIdentifier(tool.name);
+    const base = normalizeToPythonIdentifier(tool.name);
     let candidate = base;
     let n = 2;
     while (used.has(candidate)) {

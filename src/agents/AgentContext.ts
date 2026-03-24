@@ -299,7 +299,7 @@ export class AgentContext {
     return (
       '\n\n## Programmatic-Only Tools\n\n' +
       'The following tools are available exclusively through the `run_tools_with_code` tool. ' +
-      'You cannot call these tools directly; instead, use `run_tools_with_code` with Python code that invokes them.\n\n' +
+      'You cannot call these tools directly; use `run_tools_with_code` with required arguments `code` and `tools_used` (see tool schema).\n\n' +
       toolDescriptions
     );
   }

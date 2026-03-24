@@ -48,6 +48,7 @@ describeIfApiKey('ProgrammaticToolCalling - Live API Integration', () => {
 
   it('executes simple single tool call', async () => {
     const args = {
+      tools_used: ['get_weather'],
       code: `
 result = await get_weather(city="San Francisco")
 print(f"Temperature: {result['temperature']}°F")
@@ -73,6 +74,7 @@ print(f"Condition: {result['condition']}")
 
   it('executes sequential tool calls in a loop', async () => {
     const args = {
+      tools_used: ['get_team_members', 'get_expenses'],
       code: `
 team = await get_team_members()
 print(f"Team size: {len(team)}")
@@ -105,6 +107,7 @@ print(f"Grand total: \${total:.2f}")
 
   it('executes parallel tool calls with asyncio.gather', async () => {
     const args = {
+      tools_used: ['get_weather'],
       code: `
 import asyncio
 
@@ -134,6 +137,7 @@ for city, weather in zip(cities, results):
 
   it('handles conditional logic', async () => {
     const args = {
+      tools_used: ['get_team_members', 'get_expenses'],
       code: `
 team = await get_team_members()
 high_spenders = []
@@ -168,6 +172,7 @@ else:
 
   it('handles early termination with break', async () => {
     const args = {
+      tools_used: ['get_team_members', 'get_expenses'],
       code: `
 team = await get_team_members()
 
@@ -197,6 +202,7 @@ else:
 
   it('handles tool execution errors gracefully', async () => {
     const args = {
+      tools_used: ['get_weather'],
       code: `
 cities = ["San Francisco", "InvalidCity", "New York"]
 
@@ -224,6 +230,7 @@ for city in cities:
 
   it('uses calculator tool', async () => {
     const args = {
+      tools_used: ['calculator'],
       code: `
 result1 = await calculator(expression="2 + 2 * 3")
 result2 = await calculator(expression="(10 + 5) / 3")
@@ -247,6 +254,7 @@ print(f"(10 + 5) / 3 = {result2['result']:.2f}")
 
   it('mixes parallel and sequential execution', async () => {
     const args = {
+      tools_used: ['get_team_members', 'get_expenses'],
       code: `
 import asyncio
 
@@ -291,6 +299,7 @@ for member, expenses in zip(team, all_expenses):
     );
 
     const args = {
+      tools_used: ['get_weather'],
       code: `
 import asyncio
 

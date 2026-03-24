@@ -133,7 +133,7 @@ async function main(): Promise<void> {
           instructions:
             'You are an AI assistant with access to programmatic tool calling. ' +
             'When you need to process multiple items or perform complex data operations, ' +
-            'use the run_tools_with_code tool to write Python code that calls tools efficiently.',
+            'use the run_tools_with_code tool to write Python code that calls tools efficiently; always pass tools_used listing every tool your code awaits.',
         },
       ],
     },
@@ -164,7 +164,7 @@ async function main(): Promise<void> {
 4. Identify anyone who spent more than $300
 5. Show me the results in a nice format
 
-Use the run_tools_with_code tool to do this efficiently - don't call each tool separately!`
+Use the run_tools_with_code tool to do this efficiently (tools_used + code) - don't call each tool separately!`
   );
 
   conversationHistory.push(userMessage);

@@ -3,17 +3,62 @@
  * Unit tests for Programmatic Tool Calling.
  * Tests manual invocation with mock tools and Code API responses.
  */
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import path from 'node:path';
+import { PassThrough } from 'node:stream';
+import { EventEmitter } from 'node:events';
+import { spawn as nodeSpawn } from 'node:child_process';
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import type * as t from '@/types';
 import {
   createProgrammaticToolCallingTool,
   formatCompletedResponse,
   extractUsedToolNames,
   filterToolsByUsage,
+  validatePtcPredeclare,
+  buildRestrictedPtcToolMap,
   executeTools,
   normalizeToPythonIdentifier,
+  buildPythonToolBindings,
   unwrapToolResponse,
 } from '../ProgrammaticToolCalling';
+import {
+  runLocalProgrammaticExecution,
+  createLocalProgrammaticToolCallingTool,
+  PTC_IPC_PREFIX,
+} from '../LocalProgrammaticExecution';
+
+function makeMockChild(
+  stdin: PassThrough,
+  stdout: PassThrough,
+  stderr: PassThrough = new PassThrough()
+): ChildProcessWithoutNullStreams {
+  const c = new EventEmitter() as unknown as ChildProcessWithoutNullStreams & {
+    killed: boolean;
+    pid: number;
+    exitCode: number | null;
+    signalCode: NodeJS.Signals | null;
+  };
+  c.stdin = stdin;
+  c.stdout = stdout;
+  c.stderr = stderr;
+  c.killed = false;
+  c.pid = 424242;
+  c.exitCode = null;
+  c.signalCode = null;
+  c.kill = jest.fn((sig?: NodeJS.Signals) => {
+    if (c.killed) {
+      return false;
+    }
+    c.killed = true;
+    queueMicrotask(() => {
+      c.exitCode = sig === 'SIGKILL' ? 1 : 0;
+      c.signalCode = sig ?? null;
+      c.emit('exit', c.exitCode, c.signalCode);
+    });
+    return true;
+  }) as unknown as ChildProcessWithoutNullStreams['kill'];
+  return c as ChildProcessWithoutNullStreams;
+}
 import {
   createProgrammaticToolRegistry,
   createGetTeamMembersTool,
@@ -226,6 +271,19 @@ describe('ProgrammaticToolCalling', () => {
       expect(normalizeToPythonIdentifier('return')).toBe('return_tool');
       expect(normalizeToPythonIdentifier('async')).toBe('async_tool');
       expect(normalizeToPythonIdentifier('import')).toBe('import_tool');
+    });
+  });
+
+  describe('buildPythonToolBindings', () => {
+    it('disambiguates tools that normalize to the same identifier', () => {
+      const { originalToPython, pythonToOriginal } = buildPythonToolBindings([
+        { name: 'query-db' },
+        { name: 'query_db' },
+      ]);
+      expect(originalToPython.get('query-db')).toBe('query_db');
+      expect(originalToPython.get('query_db')).toBe('query_db_2');
+      expect(pythonToOriginal.get('query_db')).toBe('query-db');
+      expect(pythonToOriginal.get('query_db_2')).toBe('query_db');
     });
   });
 
@@ -578,6 +636,109 @@ for member in team:
     });
   });
 
+  describe('validatePtcPredeclare', () => {
+    const allToolDefs: t.LCTool[] = [
+      {
+        name: 'get_weather',
+        description: 'Get weather',
+        parameters: { type: 'object', properties: { city: { type: 'string' } } },
+      },
+      {
+        name: 'crm_soft_delete_contact',
+        description: 'Delete',
+        parameters: { type: 'object', properties: {} },
+      },
+    ];
+
+    it('accepts empty tools_used when code calls no tools', () => {
+      const r = validatePtcPredeclare({
+        code: 'print("hi")',
+        tools_used: [],
+        toolDefs: allToolDefs,
+      });
+      expect(r.ok).toBe(true);
+      if (r.ok) {
+        expect(r.allowedNames.size).toBe(0);
+        expect(r.allowedToolDefs).toHaveLength(0);
+      }
+    });
+
+    it('rejects empty tools_used when code references tools', () => {
+      const r = validatePtcPredeclare({
+        code: 'await get_weather(city="SF")',
+        tools_used: [],
+        toolDefs: allToolDefs,
+      });
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect(r.errorMessage).toContain('tools_used is []');
+      }
+    });
+
+    it('rejects unknown tool in tools_used', () => {
+      const r = validatePtcPredeclare({
+        code: 'print(1)',
+        tools_used: ['not_a_tool'],
+        toolDefs: allToolDefs,
+      });
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect(r.errorMessage).toContain('Unknown tool');
+      }
+    });
+
+    it('rejects code that calls tools not in tools_used', () => {
+      const r = validatePtcPredeclare({
+        code: 'await crm_soft_delete_contact()',
+        tools_used: ['get_weather'],
+        toolDefs: allToolDefs,
+      });
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect(r.errorMessage).toContain('not in tools_used');
+      }
+    });
+
+    it('accepts superset declaration', () => {
+      const r = validatePtcPredeclare({
+        code: 'await get_weather(city="X")',
+        tools_used: ['get_weather', 'crm_soft_delete_contact'],
+        toolDefs: allToolDefs,
+      });
+      expect(r.ok).toBe(true);
+      if (r.ok) {
+        expect(r.allowedToolDefs).toHaveLength(2);
+      }
+    });
+
+    it('rejects when toolMap is missing a declared tool', () => {
+      const toolMap = new Map([['get_weather', createGetWeatherTool()]]);
+      const r = validatePtcPredeclare({
+        code: 'print(1)',
+        tools_used: ['get_weather', 'crm_soft_delete_contact'],
+        toolDefs: allToolDefs,
+        toolMap,
+      });
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect(r.errorMessage).toContain('not loaded');
+      }
+    });
+  });
+
+  describe('buildRestrictedPtcToolMap', () => {
+    it('keeps only declared names present in the map', () => {
+      const w = createGetWeatherTool();
+      const full = new Map([
+        ['get_weather', w],
+        ['get_team_members', createGetTeamMembersTool()],
+      ]);
+      const restricted = buildRestrictedPtcToolMap(full, new Set(['get_weather']));
+      expect(restricted.size).toBe(1);
+      expect(restricted.get('get_weather')).toBe(w);
+    });
+  });
+
   describe('formatCompletedResponse', () => {
     it('formats response with stdout', () => {
       const response: t.ProgrammaticExecutionResponse = {
@@ -593,6 +754,23 @@ for member in team:
       expect(output).toContain('stdout:\nHello, World!');
       expect(artifact.session_id).toBe('sess_abc123');
       expect(artifact.files).toEqual([]);
+    });
+
+    it('prepends bridge stdout (non-IPC) when provided', () => {
+      const response: t.ProgrammaticExecutionResponse = {
+        status: 'completed',
+        stdout: 'ok\n',
+        stderr: '',
+        files: [],
+        session_id: 'sess_abc123',
+      };
+
+      const [output] = formatCompletedResponse(response, {
+        bridgeStdoutNonIpc: 'warning: line one',
+      });
+
+      expect(output).toContain('bridge stdout (non-IPC):\nwarning: line one');
+      expect(output).toContain('stdout:\nok');
     });
 
     it('shows empty output message when no stdout', () => {
@@ -692,51 +870,282 @@ for member in team:
 
     it('throws error when no toolMap provided', async () => {
       await expect(
-        ptcTool.invoke({
-          code: 'result = await get_weather(city="SF")\nprint(result)',
-          tools: toolDefinitions,
-          toolMap,
-        })
+        ptcTool.invoke(
+          {
+            code: 'result = await get_weather(city="SF")\nprint(result)',
+            tools_used: ['get_weather'],
+          },
+          {},
+        ),
       ).rejects.toThrow('No toolMap provided');
     });
 
     it('throws error when toolMap is empty', async () => {
       const args = {
         code: 'result = await get_weather(city="SF")\nprint(result)',
-        tools: toolDefinitions,
-        toolMap: new Map(),
+        tools_used: ['get_weather'],
       };
       const toolCall = {
         name: 'programmatic_tool_calling',
-        args,
+        args: {},
+        toolMap: new Map(),
+        toolDefs: toolDefinitions,
       };
       await expect(
         ptcTool.invoke(args, {
           toolCall,
-        })
+        }),
       ).rejects.toThrow('No toolMap provided');
     });
 
     it('throws error when no tool definitions provided', async () => {
       const args = {
         code: 'result = await get_weather(city="SF")\nprint(result)',
-        // No tools
+        tools_used: ['get_weather'],
       };
       const toolCall = {
         name: 'programmatic_code_execution',
-        args,
+        args: {},
         toolMap,
         // No `toolDefs`
       };
 
       await expect(ptcTool.invoke(args, { toolCall })).rejects.toThrow(
-        'No tool definitions provided'
+        'No tool definitions provided',
       );
     });
 
     it('uses toolDefs from config when tools not provided', async () => {
       // Skip this test - requires mocking fetch which has complex typing
       // This functionality is tested in the live script tests instead
+    });
+  });
+
+  describe('runLocalProgrammaticExecution (spawn mock)', () => {
+    const bridgePath = path.join(__dirname, '..', 'ptc-bridge.py');
+
+    it('completes when bridge emits completed', async () => {
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      stdin.once('data', () => {
+        stdout.write(
+          `${PTC_IPC_PREFIX}${JSON.stringify({ status: 'completed', stdout: 'hello', stderr: '' })}\n`
+        );
+      });
+      const mockSpawn = jest.fn(() => makeMockChild(stdin, stdout));
+
+      const [out] = await runLocalProgrammaticExecution({
+        code: 'print(1)',
+        toolDefs: [{ name: 'x', parameters: { type: 'object', properties: {} } }],
+        toolMap: new Map(),
+        bridgeScriptPath: bridgePath,
+        timeoutMs: 5000,
+        _spawnImpl: mockSpawn as unknown as typeof nodeSpawn,
+      });
+      expect(out).toContain('hello');
+    });
+
+    it('runs one tool round-trip then completes', async () => {
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      let buf = '';
+      stdin.on('data', (chunk: Buffer) => {
+        buf += chunk.toString();
+        let idx: number;
+        while ((idx = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, idx);
+          buf = buf.slice(idx + 1);
+          if (!line.startsWith(PTC_IPC_PREFIX)) {
+            stdout.write(
+              `${PTC_IPC_PREFIX}${JSON.stringify({
+                status: 'tool_call_required',
+                tool_calls: [
+                  { id: 'call_001', name: 'get_weather', input: { city: 'Z' } },
+                ],
+              })}\n`
+            );
+          } else {
+            const payload = JSON.parse(line.slice(PTC_IPC_PREFIX.length)) as {
+              tool_results?: t.PTCToolResult[];
+            };
+            if (payload.tool_results) {
+              stdout.write(
+                `${PTC_IPC_PREFIX}${JSON.stringify({
+                  status: 'completed',
+                  stdout: 'done',
+                  stderr: '',
+                })}\n`
+              );
+            }
+          }
+        }
+      });
+      const mockSpawn = jest.fn(() => makeMockChild(stdin, stdout));
+
+      const weather = createGetWeatherTool();
+      const toolMap = new Map<string, typeof weather>([['get_weather', weather]]);
+      const toolDefs: t.LCTool[] = [
+        {
+          name: 'get_weather',
+          description: 'w',
+          parameters: { type: 'object', properties: { city: { type: 'string' } } },
+        },
+      ];
+
+      const [out] = await runLocalProgrammaticExecution({
+        code: 'r = await get_weather(city="Z")\nprint(r)',
+        toolDefs,
+        toolMap,
+        bridgeScriptPath: bridgePath,
+        timeoutMs: 5000,
+        _spawnImpl: mockSpawn as unknown as typeof nodeSpawn,
+      });
+      expect(out).toContain('done');
+    });
+
+    it('throws when max round trips exceeded', async () => {
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      let buf = '';
+      stdin.on('data', (chunk: Buffer) => {
+        buf += chunk.toString();
+        let idx: number;
+        while ((idx = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, idx);
+          buf = buf.slice(idx + 1);
+          stdout.write(
+            `${PTC_IPC_PREFIX}${JSON.stringify({
+              status: 'tool_call_required',
+              tool_calls: [
+                { id: 'call_001', name: 'get_weather', input: { city: 'Z' } },
+              ],
+            })}\n`
+          );
+        }
+      });
+      const mockSpawn = jest.fn(() => makeMockChild(stdin, stdout));
+
+      const weather = createGetWeatherTool();
+      const toolMap = new Map([['get_weather', weather]]);
+      const toolDefs: t.LCTool[] = [
+        {
+          name: 'get_weather',
+          parameters: { type: 'object', properties: { city: { type: 'string' } } },
+        },
+      ];
+
+      await expect(
+        runLocalProgrammaticExecution({
+          code: 'await get_weather(city="Z")',
+          toolDefs,
+          toolMap,
+          bridgeScriptPath: bridgePath,
+          timeoutMs: 5000,
+          maxRoundTrips: 2,
+          _spawnImpl: mockSpawn as unknown as typeof nodeSpawn,
+        })
+      ).rejects.toThrow(/Exceeded maximum round trips/);
+    });
+
+    it('times out when bridge never responds', async () => {
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      const mockSpawn = jest.fn(() => makeMockChild(stdin, stdout));
+
+      await expect(
+        runLocalProgrammaticExecution({
+          code: 'print(1)',
+          toolDefs: [{ name: 'x', parameters: { type: 'object', properties: {} } }],
+          toolMap: new Map(),
+          bridgeScriptPath: bridgePath,
+          timeoutMs: 80,
+          _spawnImpl: mockSpawn as unknown as typeof nodeSpawn,
+        })
+      ).rejects.toThrow(/timed out/);
+    });
+
+    it('rejects on invalid IPC JSON', async () => {
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      stdin.once('data', () => {
+        stdout.write(`${PTC_IPC_PREFIX}{not-json\n`);
+      });
+      const mockSpawn = jest.fn(() => makeMockChild(stdin, stdout));
+
+      await expect(
+        runLocalProgrammaticExecution({
+          code: 'print(1)',
+          toolDefs: [{ name: 'x', parameters: { type: 'object', properties: {} } }],
+          toolMap: new Map(),
+          bridgeScriptPath: bridgePath,
+          timeoutMs: 2000,
+          _spawnImpl: mockSpawn as unknown as typeof nodeSpawn,
+        })
+      ).rejects.toThrow(/Invalid IPC JSON/);
+    });
+
+    it('fails fast when spawn errors', async () => {
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      const child = makeMockChild(stdin, stdout);
+      const mockSpawn = jest.fn(() => child);
+      setImmediate(() => child.emit('error', new Error('spawn python3 ENOENT')));
+
+      await expect(
+        runLocalProgrammaticExecution({
+          code: 'print(1)',
+          toolDefs: [{ name: 'x', parameters: { type: 'object', properties: {} } }],
+          toolMap: new Map(),
+          bridgeScriptPath: bridgePath,
+          timeoutMs: 5000,
+          _spawnImpl: mockSpawn as unknown as typeof nodeSpawn,
+        })
+      ).rejects.toThrow(/ENOENT|spawn python3/);
+    });
+
+    it('throws on non-JSON-serializable tool parameters in bootstrap', async () => {
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      const mockSpawn = jest.fn(() => makeMockChild(stdin, stdout));
+      const circular: Record<string, unknown> = {};
+      circular.self = circular;
+
+      await expect(
+        runLocalProgrammaticExecution({
+          code: 'print(1)',
+          toolDefs: [
+            {
+              name: 'bad_tool',
+              parameters: circular as t.LCTool['parameters'],
+            },
+          ],
+          toolMap: new Map(),
+          bridgeScriptPath: bridgePath,
+          timeoutMs: 2000,
+          _spawnImpl: mockSpawn as unknown as typeof nodeSpawn,
+        })
+      ).rejects.toThrow(/invalid tool metadata for JSON serialization/);
+    });
+  });
+
+  describe('createLocalProgrammaticToolCallingTool', () => {
+    const bridgePath = path.join(__dirname, '..', 'ptc-bridge.py');
+
+    it('throws when toolMap missing', async () => {
+      const ptc = createLocalProgrammaticToolCallingTool({
+        bridgeScriptPath: bridgePath,
+      });
+      await expect(
+        ptc.invoke(
+          { code: 'print(1)', tools_used: [] },
+          {
+            toolCall: {
+              args: {},
+              toolDefs: [{ name: 'x', parameters: { type: 'object', properties: {} } }],
+            },
+          } as unknown as Parameters<typeof ptc.invoke>[1],
+        ),
+      ).rejects.toThrow('No toolMap provided');
     });
   });
 

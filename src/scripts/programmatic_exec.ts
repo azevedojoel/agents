@@ -21,7 +21,11 @@ config();
 
 import type { StructuredToolInterface } from '@langchain/core/tools';
 import type { LCTool, ToolMap } from '@/types';
-import { createProgrammaticToolCallingTool } from '@/tools/ProgrammaticToolCalling';
+import {
+  createProgrammaticToolCallingTool,
+  buildPythonToolBindings,
+  extractUsedToolNames,
+} from '@/tools/ProgrammaticToolCalling';
 import {
   createGetTeamMembersTool,
   createGetExpensesTool,
@@ -37,6 +41,8 @@ import {
 interface RunTestOptions {
   toolMap: ToolMap;
   tools?: LCTool[];
+  /** If omitted, inferred from code via static analysis (must match validatePtcPredeclare). */
+  tools_used?: string[];
   session_id?: string;
   timeout?: number;
   showArtifact?: boolean;
@@ -59,14 +65,27 @@ async function runTest(
   try {
     const startTime = Date.now();
 
-    // Manual testing: schema params + extras (LangChain moves extras to config.toolCall)
-    const result = await ptcTool.invoke({
-      code,
-      tools: options.tools,
-      session_id: options.session_id,
-      timeout: options.timeout,
-      toolMap: options.toolMap, // Non-schema field → config.toolCall.toolMap
-    });
+    const toolDefs = options.tools ?? [];
+    let tools_used = options.tools_used;
+    if (tools_used == null) {
+      const { pythonToOriginal } = buildPythonToolBindings(toolDefs);
+      tools_used = [...extractUsedToolNames(code.trim(), pythonToOriginal)];
+    }
+
+    const trimmedCode = code.trim();
+    const result = await ptcTool.invoke(
+      { code: trimmedCode, tools_used },
+      {
+        toolCall: {
+          args: { code: trimmedCode, tools_used },
+          toolMap: options.toolMap,
+          toolDefs,
+          ...(options.session_id != null && options.session_id !== ''
+            ? { session_id: options.session_id }
+            : {}),
+        },
+      } as Parameters<typeof ptcTool.invoke>[1],
+    );
 
     const duration = Date.now() - startTime;
 
@@ -354,10 +373,9 @@ print(f"Temperature difference: {difference}°F")
   console.log(
     '\nWhen PTC is invoked through ToolNode in a real agent:\n' +
       '- ToolNode detects call.name === "run_tools_with_code"\n' +
-      '- ToolNode injects: { ...invokeParams, toolMap, toolDefs }\n' +
-      '- PTC tool extracts these from params (not from config)\n' +
-      '- No explicit tools parameter needed in schema\n\n' +
-      'This test demonstrates param injection with explicit tools:\n'
+      '- ToolNode injects toolMap + toolDefs into config.toolCall\n' +
+      '- Schema requires code + tools_used (every awaited tool name)\n\n' +
+      'This test demonstrates the same injection pattern:\n'
   );
 
   await runTest(

@@ -206,7 +206,8 @@ async function testProgrammaticToolCalling(): Promise<void> {
           instructions:
             'You are a friendly AI assistant with advanced coding capabilities.\n\n' +
             'IMPORTANT: The tools get_team_members(), get_expenses(), and get_weather() are NOT available ' +
-            'for direct function calling. You MUST use the run_tools_with_code tool to invoke them.\n\n' +
+            'for direct function calling. You MUST use the run_tools_with_code tool to invoke them. ' +
+            'Always pass tools_used with every tool name your Python code will call.\n\n' +
             'When you need to use these tools, write Python code using run_tools_with_code that calls:\n' +
             '- await get_team_members() - returns list of team members\n' +
             '- await get_expenses(user_id="...") - returns expenses for a user\n' +
@@ -244,7 +245,7 @@ async function testProgrammaticToolCalling(): Promise<void> {
 4. Identify anyone who spent more than $500
 5. Show me a summary report
 
-IMPORTANT: Use the run_tools_with_code tool to do this efficiently. 
+IMPORTANT: Use the run_tools_with_code tool to do this efficiently (include tools_used for every tool you await).
 Don't call each tool separately - write Python code that orchestrates all the calls!`;
 
   conversationHistory.push(new HumanMessage(userMessage1));
@@ -274,7 +275,7 @@ Don't call each tool separately - write Python code that orchestrates all the ca
 3. For the Engineering team members only, calculate their travel expenses
 4. Show me the results
 
-Again, use run_tools_with_code for maximum efficiency. Use asyncio.gather() 
+Again, use run_tools_with_code for maximum efficiency (with tools_used). Use asyncio.gather() 
 to check both cities' weather at the same time!`;
 
   conversationHistory.push(new HumanMessage(userMessage2));

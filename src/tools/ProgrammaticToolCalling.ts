@@ -48,6 +48,7 @@ const ADDITIONAL_RULES = `- Generated files are automatically available in /mnt/
 - Tool names normalized: hyphens→underscores, keywords get \`_tool\` suffix`;
 
 const EXAMPLES = `Example (Complete workflow in one call):
+  tools_used: ["query_database", "write_to_sheet"]
   # Query data
   data = await query_database(sql="SELECT * FROM users")
   # Process it
@@ -58,6 +59,7 @@ const EXAMPLES = `Example (Complete workflow in one call):
   print(f"Wrote {len(summary)} rows")
 
 Example (Parallel calls):
+  tools_used: ["get_weather"]
   sf, ny = await asyncio.gather(get_weather(city="SF"), get_weather(city="NY"))
   print(f"SF: {sf}, NY: {ny}")`;
 
@@ -75,6 +77,10 @@ ${EXAMPLES}
 
 ${CORE_RULES}`;
 
+/** Kept short: `required` in the schema enforces presence; providers surface schema errors to the model. */
+const TOOLS_USED_PARAM_DESCRIPTION =
+  'Tool names your code will await (registered names). Use [] only when the code calls no tools.';
+
 export const ProgrammaticToolCallingSchema = {
   type: 'object',
   properties: {
@@ -83,8 +89,13 @@ export const ProgrammaticToolCallingSchema = {
       minLength: 1,
       description: CODE_PARAM_DESCRIPTION,
     },
+    tools_used: {
+      type: 'array',
+      items: { type: 'string' },
+      description: TOOLS_USED_PARAM_DESCRIPTION,
+    },
   },
-  required: ['code'],
+  required: ['code', 'tools_used'],
 } as const;
 
 export const ProgrammaticToolCallingName = Constants.PROGRAMMATIC_TOOL_CALLING;
@@ -178,6 +189,33 @@ export function normalizeToPythonIdentifier(name: string): string {
 }
 
 /**
+ * Assigns unique Python identifiers for each tool (handles collisions after normalize).
+ */
+export function buildPythonToolBindings(toolDefs: { name: string }[]): {
+  originalToPython: Map<string, string>;
+  pythonToOriginal: Map<string, string>;
+} {
+  const originalToPython = new Map<string, string>();
+  const used = new Set<string>();
+  for (const tool of toolDefs) {
+    let base = normalizeToPythonIdentifier(tool.name);
+    let candidate = base;
+    let n = 2;
+    while (used.has(candidate)) {
+      candidate = `${base}_${n}`;
+      n += 1;
+    }
+    used.add(candidate);
+    originalToPython.set(tool.name, candidate);
+  }
+  const pythonToOriginal = new Map<string, string>();
+  for (const [orig, py] of originalToPython) {
+    pythonToOriginal.set(py, orig);
+  }
+  return { originalToPython, pythonToOriginal };
+}
+
+/**
  * Extracts tool names that are actually called in the Python code.
  * Handles hyphen/underscore conversion since Python identifiers use underscores.
  * @param code - The Python code to analyze
@@ -215,13 +253,8 @@ export function filterToolsByUsage(
   code: string,
   debug = false
 ): t.LCTool[] {
-  const toolNameMap = new Map<string, string>();
-  for (const tool of toolDefs) {
-    const pythonName = normalizeToPythonIdentifier(tool.name);
-    toolNameMap.set(pythonName, tool.name);
-  }
-
-  const usedToolNames = extractUsedToolNames(code, toolNameMap);
+  const { pythonToOriginal } = buildPythonToolBindings(toolDefs);
+  const usedToolNames = extractUsedToolNames(code, pythonToOriginal);
 
   if (debug) {
     console.log(
@@ -244,6 +277,127 @@ export function filterToolsByUsage(
   }
 
   return toolDefs.filter((tool) => usedToolNames.has(tool.name));
+}
+
+export type ValidatePtcPredeclareOk = {
+  ok: true;
+  allowedToolDefs: t.LCTool[];
+  allowedNames: Set<string>;
+};
+
+export type ValidatePtcPredeclareErr = {
+  ok: false;
+  errorMessage: string;
+};
+
+export type ValidatePtcPredeclareResult = ValidatePtcPredeclareOk | ValidatePtcPredeclareErr;
+
+/**
+ * Validates pre-declared tool names for run_tools_with_code: every name must exist in toolDefs,
+ * every tool referenced in code (statically) must be declared, and optional toolMap keys must cover declarations.
+ */
+export function validatePtcPredeclare(params: {
+  code: unknown;
+  tools_used: unknown;
+  toolDefs: t.LCTool[];
+  toolMap?: t.ToolMap;
+}): ValidatePtcPredeclareResult {
+  const { code: codeRaw, tools_used: toolsUsedRaw, toolDefs, toolMap } = params;
+
+  if (typeof codeRaw !== 'string' || codeRaw.trim().length === 0) {
+    return {
+      ok: false,
+      errorMessage: 'Invalid code: non-empty string required.',
+    };
+  }
+  const code = codeRaw;
+
+  if (!Array.isArray(toolsUsedRaw)) {
+    return {
+      ok: false,
+      errorMessage: 'Invalid tools_used: array of tool names required ([] if no tools).',
+    };
+  }
+
+  const declared: string[] = [];
+  const seen = new Set<string>();
+  for (const item of toolsUsedRaw) {
+    if (typeof item !== 'string') {
+      return {
+        ok: false,
+        errorMessage: 'Invalid tools_used: every entry must be a string (tool name).',
+      };
+    }
+    const n = item.trim();
+    if (n === '') {
+      continue;
+    }
+    if (!seen.has(n)) {
+      seen.add(n);
+      declared.push(n);
+    }
+  }
+  const allowedNames = new Set(declared);
+
+  const defByName = new Map(toolDefs.map((d) => [d.name, d]));
+  for (const name of allowedNames) {
+    if (!defByName.has(name)) {
+      const hint = [...defByName.keys()].sort().join(', ') || '(none)';
+      return {
+        ok: false,
+        errorMessage: `Unknown tool "${name}" in tools_used. Allowed: ${hint}.`,
+      };
+    }
+  }
+
+  if (toolMap) {
+    for (const name of allowedNames) {
+      if (!toolMap.has(name)) {
+        return {
+          ok: false,
+          errorMessage: `Tool "${name}" in tools_used is not loaded.`,
+        };
+      }
+    }
+  }
+
+  const { pythonToOriginal } = buildPythonToolBindings(toolDefs);
+  const usedInCode = extractUsedToolNames(code, pythonToOriginal);
+
+  if (allowedNames.size === 0) {
+    if (usedInCode.size > 0) {
+      return {
+        ok: false,
+        errorMessage: `tools_used is [] but code calls: ${[...usedInCode].join(', ')}.`,
+      };
+    }
+  } else {
+    const undeclared = [...usedInCode].filter((u) => !allowedNames.has(u));
+    if (undeclared.length > 0) {
+      return {
+        ok: false,
+        errorMessage: `Code calls tools not in tools_used: ${undeclared.join(', ')}.`,
+      };
+    }
+  }
+
+  const allowedToolDefs = toolDefs.filter((d) => allowedNames.has(d.name));
+  return { ok: true, allowedToolDefs, allowedNames };
+}
+
+/** Restricts the executable tool map to pre-declared names only (executeTools allowlist). */
+export function buildRestrictedPtcToolMap(
+  fullMap: t.ToolMap,
+  allowedNames: Set<string>,
+): t.ToolMap {
+  const out = new Map<string, t.GenericTool>();
+  for (const name of allowedNames) {
+    const inst = fullMap.get(name);
+    if (inst) {
+      out.set(name, inst);
+    }
+  }
+  return out;
 }
 
 /**
@@ -532,9 +686,14 @@ export async function executeTools(
  * @returns Tuple of [formatted string, artifact]
  */
 export function formatCompletedResponse(
-  response: t.ProgrammaticExecutionResponse
+  response: t.ProgrammaticExecutionResponse,
+  options?: { bridgeStdoutNonIpc?: string },
 ): [string, t.ProgrammaticExecutionArtifact] {
   let formatted = '';
+  const nonIpc = options?.bridgeStdoutNonIpc?.trim();
+  if (nonIpc) {
+    formatted += `bridge stdout (non-IPC):\n${nonIpc}\n\n`;
+  }
 
   if (response.stdout != null && response.stdout !== '') {
     formatted += `stdout:\n${response.stdout}\n`;
@@ -626,8 +785,13 @@ export function createProgrammaticToolCallingTool(
 
   return tool(
     async (rawParams, config) => {
-      const params = rawParams as { code: string };
-      const { code } = params;
+      const params = rawParams as { code?: unknown; tools_used?: unknown };
+      if (typeof params.code !== 'string' || params.code.trim().length === 0) {
+        throw new Error('Invalid code: non-empty string required.');
+      }
+      if (!Array.isArray(params.tools_used)) {
+        throw new Error('Invalid tools_used: array of tool names required ([] if no tools).');
+      }
 
       // Extra params injected by ToolNode (follows web_search pattern)
       const { toolMap, toolDefs, session_id, _injected_files } =
@@ -651,19 +815,30 @@ export function createProgrammaticToolCallingTool(
         );
       }
 
+      const validated = validatePtcPredeclare({
+        code: params.code as string,
+        tools_used: params.tools_used,
+        toolDefs,
+        toolMap,
+      });
+      if (!validated.ok) {
+        throw new Error(validated.errorMessage);
+      }
+
+      const effectiveTools = validated.allowedToolDefs;
+      const restrictedToolMap = buildRestrictedPtcToolMap(toolMap, validated.allowedNames);
+
       let roundTrip = 0;
 
       try {
         // ====================================================================
-        // Phase 1: Filter tools and make initial request
+        // Phase 1: Pre-declared allowlist → Code API payload
         // ====================================================================
-
-        const effectiveTools = filterToolsByUsage(toolDefs, code, debug);
 
         if (debug) {
           console.log(
             `[PTC Debug] Sending ${effectiveTools.length} tools to API ` +
-              `(filtered from ${toolDefs.length})`
+              `(pre-declared tools_used, from ${toolDefs.length} available)`
           );
         }
 
@@ -683,7 +858,7 @@ export function createProgrammaticToolCallingTool(
           EXEC_ENDPOINT,
           apiKey,
           {
-            code,
+            code: params.code,
             tools: effectiveTools,
             session_id,
             timeout: timeoutMs,
@@ -715,7 +890,7 @@ export function createProgrammaticToolCallingTool(
 
           const toolResults = await executeTools(
             response.tool_calls ?? [],
-            toolMap
+            restrictedToolMap
           );
 
           response = await makeRequest(

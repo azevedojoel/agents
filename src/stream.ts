@@ -459,7 +459,7 @@ export function createContentAggregator(): t.ContentAggregatorResult {
     finalUpdate = false
   ): void => {
     if (!contentPart) {
-      console.warn("No content part found in 'updateContent'");
+      console.warn('No content part found in \'updateContent\'');
       return;
     }
     const partType = contentPart.type ?? '';
@@ -706,6 +706,10 @@ export function createContentAggregator(): t.ContentAggregatorResult {
       if (finalUpdate) {
         newToolCall.progress = 1;
         newToolCall.output = contentPart.tool_call.output;
+        const incomingErr = (contentPart.tool_call as { error?: boolean }).error;
+        if (incomingErr === true) {
+          (newToolCall as Record<string, unknown>).error = true;
+        }
       }
 
       const isToolSearch =

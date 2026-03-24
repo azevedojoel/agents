@@ -484,6 +484,7 @@ export class ToolNode<T = any> extends RunnableCallable<T, T> {
         id: result.toolCallId,
         output: contentString,
         progress: 1,
+        ...(result.status === 'error' ? { error: true as const } : {}),
       };
 
       const runStepCompletedData = {

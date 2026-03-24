@@ -143,6 +143,8 @@ export type ProcessedToolCall = {
   id: string;
   output: string;
   progress: number;
+  /** Present when tool execution failed */
+  error?: boolean;
 };
 
 export type ProcessedContent = {
@@ -318,6 +320,8 @@ export type ToolCallPart = {
   id?: string;
   /** If provided, the output of the tool call */
   output?: string;
+  /** True when tool execution failed */
+  error?: boolean;
   /** Auth URL */
   auth?: string;
   /** Expiration time */

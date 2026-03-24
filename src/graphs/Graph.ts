@@ -1339,6 +1339,7 @@ You cannot continue until you await. When multiple plans exist, specify which pl
       args: typeof args === 'string' ? args : JSON.stringify(args),
       output: `Error processing tool${error?.message != null ? `: ${error.message}` : ''}`,
       progress: 1,
+      error: true,
     };
 
     await graph.handlerRegistry

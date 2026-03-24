@@ -12,6 +12,7 @@ export * from './graphs';
 export * from './tools/Calculator';
 export * from './tools/CodeExecutor';
 export * from './tools/ProgrammaticToolCalling';
+export * from './tools/LocalProgrammaticExecution';
 export * from './tools/ToolSearch';
 export * from './tools/ToolNode';
 export * from './tools/schema';

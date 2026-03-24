@@ -1,4 +1,5 @@
 // rollup.config.js
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import alias from '@rollup/plugin-alias';
@@ -93,6 +94,17 @@ export default {
         'node_modules/**',
       ],
     }),
+    {
+      name: 'copy-ptc-bridge',
+      writeBundle() {
+        const src = path.resolve(__dirname, 'src/tools/ptc-bridge.py');
+        for (const sub of ['dist/esm/tools', 'dist/cjs/tools']) {
+          const destDir = path.resolve(__dirname, sub);
+          fs.mkdirSync(destDir, { recursive: true });
+          fs.copyFileSync(src, path.join(destDir, 'ptc-bridge.py'));
+        }
+      },
+    },
     /* Disable terser/obfuscator for now */
     // isProduction && terser(),
     // isProduction && obfuscator({
